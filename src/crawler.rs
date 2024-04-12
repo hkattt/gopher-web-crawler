@@ -1,4 +1,4 @@
-use std::io::{Read, Error, ErrorKind};
+use std::{fs::File, io::{Error, ErrorKind, Read, Write}, net::TcpStream};
 
 use request::Request;
 use response_line::{ItemType, ResponseLine};
@@ -99,14 +99,22 @@ impl Crawler {
                 self.used_selectors.push(response_line.selector.to_string());
 
                 self.ntxt += 1;
-                // let stream = send_response_line(response_line);
-                // match stream {
-                //     Ok(stream) => {
-                //         let buffer = recv_response_line(stream)?;
-                //         //println!("DOCUMENT:\n{buffer}");
-                //     }
-                //     Err(e) => eprintln!("Error sending response line: {e}")
-                // }
+                let request = Request::new(response_line.selector, 
+                        response_line.server_name, 
+                        response_line.server_port.parse().unwrap()
+                );
+
+                let stream = request.send();
+                match stream {
+                    Ok(stream) => {
+                        let buffer = Self::recv_response_line(stream)?;
+                        let mut f = File::create(response_line.selector.replace("/", "-"))?;
+                        f.write_all(buffer.as_bytes())?;
+                        // TODO: Deal with big size?
+                        //println!("DOCUMENT:\n{buffer}");
+                    }
+                    Err(e) => eprintln!("Error sending response line: {e}")
+                }
             },
             ItemType::DIR => {
                 self.ndir += 1;
@@ -142,6 +150,13 @@ impl Crawler {
             },
         }
         Ok(())
+    }
+
+    // TODO: Change?
+    fn recv_response_line(mut stream: TcpStream) -> std::io::Result<String> {
+        let mut buffer = String::new();
+        stream.read_to_string(&mut buffer)?;
+        Ok(buffer)
     }
 
     fn has_crawled(&self, selector: &str) -> bool {
