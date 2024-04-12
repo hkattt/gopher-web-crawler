@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
+use chrono::{Local, Timelike};
 
 // Open server on Gophie with: comp3310.ddns.net:70
 // Local host: 127.0.0.1
@@ -7,6 +8,7 @@ use std::net::TcpStream;
 // const BUFFER_SIZE: u32  = 4096; // TODO: Is this needed?
 const CRLF: &str           = "\r\n";
 const TAB:  &str           = "\t";
+const COLON: &str          = ":";
 const SERVER_DETAILS: &str = "comp3310.ddns.net:70";
 
 struct ResponseLine<'a> {
@@ -27,6 +29,10 @@ impl<'a> ResponseLine<'a> {
             server_port: parts.next().unwrap(),
         }
     }
+
+    fn get_server_details(&self) -> String {
+        [self.server_name, COLON, self.server_port].concat()
+    }
 }
 
 fn main() -> std::io::Result<()> {
@@ -41,36 +47,49 @@ fn main() -> std::io::Result<()> {
     let lines = buffer.split(CRLF);
 
     for line in lines {
-        process_response_line(line)
+        process_response_line(line)?;
     }
     
     Ok(())
 }
 
-fn process_response_line(line: &str) {
-    if line.starts_with('0') {
-        let response_line = ResponseLine::new(line);
-
-        println!("--- NEW LINE ---\n \
-            selector: {}\n \
-            server name: {}\n \
-            server_port: {}",
-            response_line.selector, 
-            response_line.server_name,
-            response_line.server_port
-        );
-    }
-
+fn process_response_line(line: &str) -> std::io::Result<()> {
     if line.starts_with('1') {
         let response_line = ResponseLine::new(line);
-
-        println!("--- NEW LINE ---\n \
-            selector: {}\n \
-            server name: {}\n \
-            server_port: {}",
-            response_line.selector, 
-            response_line.server_name,
-            response_line.server_port
-        );
+        let stream = send_response_line(response_line);
+        match stream {
+            Ok(stream) => {
+                let buffer = recv_response_line(stream)?;
+                //println!("DOCUMENT:\n{buffer}");
+            }
+            Err(e) => println!("Error sending response line: {e}")
+        }
     }
+
+    Ok(())
+}
+
+fn send_response_line(response_line: ResponseLine) -> std::io::Result<TcpStream> {
+    // Get the current local time
+    let local_time = Local::now();
+
+    let server_details = response_line.get_server_details();
+
+    let mut stream = TcpStream::connect(server_details)?;
+
+    println!("[{:02}h:{:02}m:{:02}s]: REQUESTING {} FROM {} AT {}", 
+        local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
+        response_line.selector, response_line.server_name, response_line.server_port
+    );
+
+    let selector = [response_line.selector, CRLF].concat();
+    stream.write(selector.as_bytes())?;
+
+    Ok(stream)
+}
+
+fn recv_response_line(mut stream: TcpStream) -> std::io::Result<String> {
+    let mut buffer = String::new();
+    stream.read_to_string(&mut buffer)?;
+    Ok(buffer)
 }
