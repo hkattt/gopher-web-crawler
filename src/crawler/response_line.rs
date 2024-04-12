@@ -47,6 +47,7 @@ impl<'a> ResponseLine<'a> {
         )
     }
 
+    // TODO: Delete?
     pub fn get_server_details(&self) -> String {
         [self.server_name, COLON, self.server_port].concat()
     }

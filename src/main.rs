@@ -20,9 +20,3 @@ fn main() -> std::io::Result<()> {
     crawler.crawl(STARTING_SELECTOR, SERVER_NAME, SERVER_PORT)?;
     Ok(())
 }
-
-// fn recv_response_line(mut stream: TcpStream) -> std::io::Result<String> {
-//     let mut buffer = String::new();
-//     stream.read_to_string(&mut buffer)?;
-//     Ok(buffer)
-// }
