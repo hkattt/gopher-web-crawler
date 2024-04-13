@@ -8,7 +8,7 @@ use crate::CRLF;
 pub mod request;
 pub mod response_line;
 
-pub fn send_and_recv(request: Request) -> std::io::Result<String> {
+pub fn send_and_recv(request: Request) -> std::io::Result<Vec<u8>> {
     // TODO: Actually handle errors
     let stream = send(request)?;
     let response = recv(stream)?;
@@ -32,8 +32,8 @@ fn send(request: Request) -> std::io::Result<TcpStream> {
     Ok(stream)
 }
 
-fn recv(mut stream: TcpStream) -> std::io::Result<String> {
-    let mut buffer = String::new();
-    stream.read_to_string(&mut buffer)?;
+fn recv(mut stream: TcpStream) -> std::io::Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+    stream.read_to_end(&mut buffer)?;
     Ok(buffer)
 }

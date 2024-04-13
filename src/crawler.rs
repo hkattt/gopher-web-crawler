@@ -1,8 +1,8 @@
 mod gopher;
 
-use std::{cmp::{max, min}, fs::{self, File}, io::{Error, ErrorKind, Write}, path::Path};
+use std::{str, cmp::{max, min}, fs::{self, File}, io::{Error, ErrorKind, Write}, path::Path};
 
-use crate::{CRLF, DOT, OUTPUT_FOLDER, SERVER_NAME};
+use crate::{CRLF, DOT, MAX_FILENAME_LEN, OUTPUT_FOLDER, SERVER_NAME};
 use gopher::{request::Request, response_line::{ItemType, ResponseLine}};
 
 pub struct Crawler {
@@ -57,15 +57,19 @@ impl Crawler {
             }
         }
         
-        let buffer = gopher::send_and_recv(request);
         // TODO: Actually handle errors
-        let buffer = match buffer {
+        let bytes = match gopher::send_and_recv(request){
             Ok(buffer) => buffer,
             Err(error) => {
                 match error.kind() {
                     _ => panic!("Problem sending OR receving request")
                 }
             }
+        };
+        // Convert byte stream into a string (i.e. UTF-8 sequence)
+        let buffer = match str::from_utf8(&bytes) {
+            Ok(buffer) => buffer,
+            Err(error) => panic!("Ivalid UTF-8 sequence: {error}"),
         };
 
         let lines = buffer.split(CRLF);
@@ -112,17 +116,26 @@ impl Crawler {
                 // TODO: Actually handle errors?
                 // TODO: Deal with big size?
                 let buffer = match gopher::send_and_recv(request) {
-                    Ok(buffer) => buffer, 
-                    Err(error) => return Err(error)
+                    Ok(bytes) => bytes, 
+                    Err(error) => {
+                        eprintln!("Error sending or receving TXT file: {error}");
+                        return Err(error)
+                    },
                 };
-                
+
                 let f = match Crawler::download_file(response_line.selector, &buffer) {
                     Ok(f) => f, 
-                    Err(error) => return Err(error),
+                    Err(error) => {
+                        eprintln!("Error downloading TXT file: {error}");
+                        return Err(error)
+                    },
                 };
                 match f.metadata() {
                     Ok(metadata) => self.largest_txt = max(self.largest_txt, metadata.len()),
-                    Err(error) => return Err(error),
+                    Err(error) => {
+                        eprintln!("Error accessing TXT file metadata: {error}");
+                        return Err(error)
+                    },
                 }
                 
                 self.ntxt += 1;
@@ -162,19 +175,28 @@ impl Crawler {
                 // TODO: Deal with big size?
                 let buffer = match gopher::send_and_recv(request) {
                     Ok(buffer) => buffer, 
-                    Err(error) => return Err(error)
+                    Err(error) => {
+                        eprintln!("Error sending or receving BIN file: {error}");
+                        return Err(error)
+                    },
                 };
 
                 let f = match Crawler::download_file(response_line.selector, &buffer) {
                     Ok(f) => f, 
-                    Err(error) => return Err(error),
+                    Err(error) => {
+                        eprintln!("Error downloading BIN file: {error}");
+                        return Err(error)
+                    },
                 };
                 match f.metadata() {
                     Ok(metadata) => {
                         self.smallest_bin = min(self.smallest_bin, metadata.len());
                         self.largest_bin = max(self.largest_bin, metadata.len());
                     },
-                    Err(error) => return Err(error),
+                    Err(error) => {
+                        eprintln!("Error accessing BIN file metadata: {error}");
+                        return Err(error)
+                    },
                 }
 
                 self.nbin += 1;
@@ -187,16 +209,18 @@ impl Crawler {
         Ok(())
     }
 
-    fn download_file(selector: &str, buffer: &str) -> std::io::Result<File> {
-        // Remove the / prefix from the selector
-        let selector = &selector[1..];
+    fn download_file(selector: &str, buffer: &[u8]) -> std::io::Result<File> {
+        // Remove the / prefix from the selector. Truncate long selector names
+        let file_name = &selector[1..min(selector.len(), MAX_FILENAME_LEN + 1)];
+        // Replace forward slashes with dashes to create a valid file name
+        let file_name = file_name.replace("/", "-");
         // TODO: Replace the string stuff with global variables?
-        let file_path = [OUTPUT_FOLDER, "/", &selector.replace("/", "-")].concat();
+        let file_path = [OUTPUT_FOLDER, "/", &file_name].concat();
         let mut f = match File::create(file_path) {
             Ok(f) => f, 
             Err(error) => return Err(error),
         };
-        f.write_all(buffer.as_bytes())?;
+        f.write_all(buffer)?;
         Ok(f)
     }
 

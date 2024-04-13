@@ -14,6 +14,7 @@ const STARTING_SELECTOR: &str = "";
 const SERVER_NAME: &str       = "comp3310.ddns.net";
 const SERVER_PORT: u16        = 70;
 const OUTPUT_FOLDER: &str     = "out";
+const MAX_FILENAME_LEN: usize = 255; // TODO: Can we get this from the OS somehow??
 
 fn main() -> std::io::Result<()> {
     // TODO: Should we make SERVER_PORT a &str?
