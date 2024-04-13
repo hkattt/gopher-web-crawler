@@ -1,4 +1,4 @@
-use crate::{TAB, COLON};
+use crate::TAB;
 
 pub enum ItemType {
     TXT,     // 0   Item is a text file
@@ -45,10 +45,5 @@ impl<'a> ResponseLine<'a> {
                 server_port: parts.next().unwrap(),
             }
         )
-    }
-
-    // TODO: Delete?
-    pub fn get_server_details(&self) -> String {
-        [self.server_name, COLON, self.server_port].concat()
     }
 }

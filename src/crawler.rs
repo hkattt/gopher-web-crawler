@@ -1,11 +1,9 @@
-use std::{fs::File, io::{Error, ErrorKind, Read, Write}, net::TcpStream};
+mod gopher;
 
-use request::Request;
-use response_line::{ItemType, ResponseLine};
-use crate::{CRLF, DOT, SERVER_NAME};
+use std::{cmp::{max, min}, fs::{self, File}, io::{Error, ErrorKind, Write}, path::Path};
 
-mod request;
-mod response_line;
+use crate::{CRLF, DOT, OUTPUT_FOLDER, SERVER_NAME};
+use gopher::{request::Request, response_line::{ItemType, ResponseLine}};
 
 pub struct Crawler {
     ndir: u32,          // The number of directories
@@ -14,9 +12,9 @@ pub struct Crawler {
     nbin:  u32,         // The number of binary (i.e. non-text) files
     // TODO: List of all binary files (full path)
     smallest_contents: String,
-    largest_txt: u32,   // The size of the largest text file
-    smallest_bin: u32,   // The size of the smallest binary file
-    largest_bin: u32,    // The size of the largest binary file
+    largest_txt: u64,   // The size of the largest text file
+    smallest_bin: u64,   // The size of the smallest binary file
+    largest_bin: u64,    // The size of the largest binary file
     nerr: u32,           // The number of unique invalid references (error types)
     // TODO: A list of external servers (see spec)
     // TODO: Any references that have "issues/errors" that your code needs to explicity deal with
@@ -33,7 +31,7 @@ impl Default for Crawler {
             // TODO: List of all binary files (full path)
             smallest_contents: String::new(),
             largest_txt: 0, 
-            smallest_bin: u32::MAX, // TODO: Is there a better way to do this?
+            smallest_bin: u64::MAX, // TODO: Is there a better way to do this?
             largest_bin: 0,
             nerr: 0,
             // TODO: Add to this
@@ -50,19 +48,25 @@ impl Crawler {
     pub fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
         let request = Request::new(selector, server_name, server_port);
         self.used_selectors.push(selector.to_string());
-        
-        let stream = request.send();
-        let mut buffer = String::new();
 
-        let mut stream = match stream {
-            Ok(stream) => stream,
+        match fs::create_dir(Path::new(&OUTPUT_FOLDER)) {
+            Ok(_) => (),
+            Err(error) => match error.kind() {
+                ErrorKind::AlreadyExists => (),
+                _ => panic!("Unable to create output folder")
+            }
+        }
+        
+        let buffer = gopher::send_and_recv(request);
+        // TODO: Actually handle errors
+        let buffer = match buffer {
+            Ok(buffer) => buffer,
             Err(error) => {
                 match error.kind() {
-                    _ => panic!("Problem sending request")
+                    _ => panic!("Problem sending OR receving request")
                 }
             }
         };
-        stream.read_to_string(&mut buffer)?;
 
         let lines = buffer.split(CRLF);
 
@@ -77,6 +81,9 @@ impl Crawler {
                 }
             }
         }
+
+        // TODO: Delete out
+
         Ok(())
     }
 
@@ -86,8 +93,7 @@ impl Crawler {
             return Ok(())
         }
         // TODO: Handle the None case better?
-        let response_line = ResponseLine::new(line);
-        let response_line = match response_line {
+        let response_line = match ResponseLine::new(line) {
             Some(response_line) => {response_line},
             None => return Err(Error::new(ErrorKind::Other, "Malformed response line")),
         };
@@ -98,28 +104,31 @@ impl Crawler {
 
                 self.used_selectors.push(response_line.selector.to_string());
 
-                self.ntxt += 1;
                 let request = Request::new(response_line.selector, 
                         response_line.server_name, 
                         response_line.server_port.parse().unwrap()
                 );
-
-                let stream = request.send();
-                match stream {
-                    Ok(stream) => {
-                        let buffer = Self::recv_response_line(stream)?;
-                        let mut f = File::create(response_line.selector.replace("/", "-"))?;
-                        f.write_all(buffer.as_bytes())?;
-                        // TODO: Deal with big size?
-                        //println!("DOCUMENT:\n{buffer}");
-                    }
-                    Err(e) => eprintln!("Error sending response line: {e}")
+                
+                // TODO: Actually handle errors?
+                // TODO: Deal with big size?
+                let buffer = match gopher::send_and_recv(request) {
+                    Ok(buffer) => buffer, 
+                    Err(error) => return Err(error)
+                };
+                
+                let f = match Crawler::download_file(response_line.selector, &buffer) {
+                    Ok(f) => f, 
+                    Err(error) => return Err(error),
+                };
+                match f.metadata() {
+                    Ok(metadata) => self.largest_txt = max(self.largest_txt, metadata.len()),
+                    Err(error) => return Err(error),
                 }
+                
+                self.ntxt += 1;
             },
             ItemType::DIR => {
-                self.ndir += 1;
-
-                if response_line.get_server_details() != SERVER_NAME {
+                if response_line.server_name != SERVER_NAME {
                     // TODO: Handle external servers
                     // Only need to try connecting
                 }
@@ -127,6 +136,8 @@ impl Crawler {
                 if self.has_crawled(response_line.selector) { return Ok(()) }
                 
                 self.used_selectors.push(response_line.selector.to_string());
+
+                self.ndir += 1;
 
                 self.crawl(response_line.selector, 
                     response_line.server_name, 
@@ -141,6 +152,30 @@ impl Crawler {
                 if self.has_crawled(response_line.selector) { return Ok(()) }
 
                 self.used_selectors.push(response_line.selector.to_string());
+                
+                let request = Request::new(response_line.selector, 
+                    response_line.server_name, 
+                    response_line.server_port.parse().unwrap()
+                );
+
+                // TODO: Actually handle errors?
+                // TODO: Deal with big size?
+                let buffer = match gopher::send_and_recv(request) {
+                    Ok(buffer) => buffer, 
+                    Err(error) => return Err(error)
+                };
+
+                let f = match Crawler::download_file(response_line.selector, &buffer) {
+                    Ok(f) => f, 
+                    Err(error) => return Err(error),
+                };
+                match f.metadata() {
+                    Ok(metadata) => {
+                        self.smallest_bin = min(self.smallest_bin, metadata.len());
+                        self.largest_bin = max(self.largest_bin, metadata.len());
+                    },
+                    Err(error) => return Err(error),
+                }
 
                 self.nbin += 1;
             },
@@ -152,11 +187,17 @@ impl Crawler {
         Ok(())
     }
 
-    // TODO: Change?
-    fn recv_response_line(mut stream: TcpStream) -> std::io::Result<String> {
-        let mut buffer = String::new();
-        stream.read_to_string(&mut buffer)?;
-        Ok(buffer)
+    fn download_file(selector: &str, buffer: &str) -> std::io::Result<File> {
+        // Remove the / prefix from the selector
+        let selector = &selector[1..];
+        // TODO: Replace the string stuff with global variables?
+        let file_path = [OUTPUT_FOLDER, "/", &selector.replace("/", "-")].concat();
+        let mut f = match File::create(file_path) {
+            Ok(f) => f, 
+            Err(error) => return Err(error),
+        };
+        f.write_all(buffer.as_bytes())?;
+        Ok(f)
     }
 
     fn has_crawled(&self, selector: &str) -> bool {
