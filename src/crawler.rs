@@ -1,6 +1,6 @@
 mod gopher;
 
-use std::{cmp::{max, min}, fs::{self, File}, io::{ErrorKind, Write}, net::TcpStream, path::Path, str};
+use std::{cmp::{max, min}, fs::File, io::Write, net::TcpStream, str};
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER, SERVER_NAME};
 use chrono::{Local, Timelike};
@@ -8,6 +8,7 @@ use gopher::{request::Request, response::{ItemType, ResponseLine}};
 
 pub struct Crawler {
     ndir: u32,                             // The number of directories
+    dirs: Vec<String>,                     // List of all directories               
     ntxt:  u32,                            // The number of simple text files
     txt_files: Vec<String>,                // List of all simple text tiles (full path)
     nbin:  u32,                            // The number of binary (i.e. non-text) files
@@ -25,7 +26,8 @@ pub struct Crawler {
 impl Default for Crawler {
     fn default() -> Crawler {
         Crawler {
-            ndir: 1,   // Count the root directory
+            ndir: 0,   // Count the root directory
+            dirs: Vec::new(),
             ntxt:  0,
             txt_files: Vec::new(), 
             nbin:  0,
@@ -50,20 +52,24 @@ impl Crawler {
     pub fn report(&self) {
         println!(
 "\nSTART CRAWLER REPORT\n
-\tNumber of Gopher directories: {}\n
-\tNumber of simple text files: {}\n
-\tList of simple text files: \n\t\t{}\n
-\tNumber of binary files: {}\n
-\tList of binary files: \n\t\t{}\n
+\tNumber of Gopher directories: {}
+\t\t{}\n
+\tNumber of simple text files: {}
+\t\t{}\n
+\tNumber of binary files: {}
+\t\t{}\n
 \tContents of the smallest text file: {}\n
 \tSize of the largest text file (bytes): {}\n
 \tSize of the smallest binary file (bytes): {}\n
 \tSize of the largest binary file (bytes): {}\n
 \tThe number of unique invalid references (error types): {}\n
-\tList of external servers: \n\t\t{}\n
-\tReferences that have issues/errors: \n\t\t{}\n
+\tList of external servers: 
+\t\t{}\n
+\tReferences that have issues/errors: 
+\t\t{}\n
 END CRAWLER REPORT",
             self.ndir,
+            self.dirs.join("\n\t\t"),
             self.ntxt,
             self.txt_files.join("\n\t\t"),
             self.nbin,
@@ -86,30 +92,24 @@ END CRAWLER REPORT",
 
     pub fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
         let request = Request::new(selector, server_name, server_port);
+        
         self.used_selectors.push(selector.to_string());
+        self.dirs.push(selector.to_string());
+        self.ndir += 1;
 
-        match fs::create_dir(Path::new(&OUTPUT_FOLDER)) {
-            Ok(_) => (),
-            Err(error) => match error.kind() {
-                ErrorKind::AlreadyExists => (),
-                _ => panic!("Unable to create output folder")
-            }
-        }
         // TODO: Actually handle errors
-        let response = match gopher::send_and_recv(request){
-            Ok(buffer) => buffer,
-            Err(error) => {
-                match error.kind() {
-                    _ => panic!("Problem sending OR receving request")
-                }
-            }
-        };
+        let response = gopher::send_and_recv(request)
+            .map_err(|error| {
+                eprintln!("Problem sending OR receving request: {error}");
+                error
+        })?;
+        // TODO: Handle invalid response?
         for response_line in response.to_response_lines() {
             if let Some(response_line) = response_line {
-                match self.process_response_line(response_line) {
-                    Ok(_) => {},
-                    Err(_) => panic!("Problem processing response line") // TODO: Handle better?
-                }
+                self.process_response_line(response_line).map_err(|error| {
+                    eprintln!("Problem processing response line: {error}");
+                    error
+                })?;
             } else {()} // Malformed request line (e.g. empty String)
         }
         Ok(())
@@ -136,10 +136,10 @@ END CRAWLER REPORT",
         let file_name = file_name.replace("/", "-");
         // TODO: Replace the string stuff with global variables?
         let file_path = [OUTPUT_FOLDER, "/", &file_name].concat();
-        let mut f = match File::create(file_path) {
-            Ok(f) => f, 
-            Err(error) => return Err(error),
-        };
+        let mut f = File::create(file_path).map_err(|error| {
+            eprintln!("Unable to create new file: {error}");
+            error
+        })?;
         f.write_all(buffer)?;
         Ok(f)
     }
@@ -169,10 +169,6 @@ END CRAWLER REPORT",
 
         if self.has_crawled(response_line.selector) { return Ok(()) }
         
-        self.used_selectors.push(response_line.selector.to_string());
-
-        self.ndir += 1;
-
         self.crawl(response_line.selector, 
             response_line.server_name, 
             response_line.server_port.parse().unwrap()
@@ -190,22 +186,17 @@ END CRAWLER REPORT",
                 response_line.server_name, 
                 response_line.server_port.parse().unwrap()
         );
-        let response = match gopher::send_and_recv(request) {
-            Ok(response) => response, 
-            Err(error) => {
-                eprintln!("Error sending or receving TXT file: {error}");
-                return Err(error)
-            },
-        };
+
+        let response = gopher::send_and_recv(request).map_err(|error| {
+            eprintln!("Error sending or receving TXT file: {error}");
+            error
+        })?;
 
         if response.valid {
-            let f = match Crawler::download_file(response_line.selector, &response.buffer) {
-                Ok(f) => f, 
-                Err(error) => {
-                    eprintln!("Error downloading TXT file: {error}");
-                    return Err(error)
-                },
-            };
+            let f = Crawler::download_file(response_line.selector, &response.buffer).map_err(|error| {
+                eprintln!("Error downloading TXT file: {error}");
+                error
+            })?;
             match f.metadata() {
                 Ok(metadata) => self.largest_txt = max(self.largest_txt, metadata.len()),
                 Err(error) => {
@@ -234,22 +225,18 @@ END CRAWLER REPORT",
 
         // TODO: Actually handle errors?
         // TODO: Deal with big size?
-        let response = match gopher::send_and_recv(request) {
-            Ok(response) => response, 
-            Err(error) => {
+        let response = gopher::send_and_recv(request)
+            .map_err(|error| {
                 eprintln!("Error sending or receving BIN file: {error}");
-                return Err(error)
-            },
-        };
+                error
+        })?;
 
         if response.valid {
-            let f = match Crawler::download_file(response_line.selector, &response.buffer) {
-                Ok(f) => f, 
-                Err(error) => {
+            let f = Crawler::download_file(response_line.selector, &response.buffer)
+                .map_err(|error| {
                     eprintln!("Error downloading BIN file: {error}");
-                    return Err(error)
-                },
-            };
+                    error
+            })?;
             match f.metadata() {
                 Ok(metadata) => {
                     self.smallest_bin = min(self.smallest_bin, metadata.len());

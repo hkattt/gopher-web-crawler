@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use chrono::{Local, Timelike};
 
 use request::Request;
-use crate::{CRLF, MAX_FILE_SIZE};
+use crate::{CRLF, MAX_CHUNK_SIZE};
 
 use self::response::Response;
 
@@ -38,7 +38,7 @@ fn send(request: Request) -> std::io::Result<TcpStream> {
 
 fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
     let mut buffer = Vec::new();
-    let mut chunk = [0; MAX_FILE_SIZE];
+    let mut chunk = [0; MAX_CHUNK_SIZE];
     let mut valid = true;
     // TODO: Handle error
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;

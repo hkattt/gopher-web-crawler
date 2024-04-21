@@ -17,10 +17,7 @@ impl Response {
 
     pub fn to_response_lines<'a>(&'a self) -> Vec<Option<ResponseLine<'a>>> {
         // Convert byte stream into a string (i.e. UTF-8 sequence)
-        let buffer = match str::from_utf8(&self.buffer) {
-            Ok(buffer) => buffer,
-            Err(error) => panic!("Ivalid UTF-8 sequence: {error}"),
-        };
+        let buffer = str::from_utf8(&self.buffer).expect("Ivalid UTF-8 sequence"); // TODO: Handle error??
         buffer.split(CRLF).map(|line| ResponseLine::new(line)).collect()
     }
 }
