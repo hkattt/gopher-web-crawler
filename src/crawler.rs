@@ -117,13 +117,13 @@ END CRAWLER REPORT",
 
     fn process_response_line(&mut self, response_line: ResponseLine) -> std::io::Result<()> {    
         match response_line.item_type {
-            ItemType::TXT => self.handle_txt(response_line)?,
+            ItemType::TXT => self.handle_supported_file(response_line, ItemType::TXT)?,
             ItemType::DIR => self.handle_dir(response_line)?,
             ItemType::ERR => {
                 self.nerr += 1;
                 self.ndir -= 1; // Ignore parent directory that led to the error
             },
-            ItemType::BIN => self.handle_bin(response_line)?,
+            ItemType::BIN => self.handle_supported_file(response_line, ItemType::BIN)?,
             ItemType::DOT | ItemType::UNKNOWN => (), // TODO: Should we do anything else?
         }
         Ok(())
@@ -176,79 +176,60 @@ END CRAWLER REPORT",
         Ok(())
     }
 
-    fn handle_txt(&mut self, response_line: ResponseLine) -> std::io::Result<()> {
+    fn handle_supported_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
         if self.has_crawled(response_line.selector) { return Ok(()) }
 
         self.used_selectors.push(response_line.selector.to_string());
-        self.txt_files.push(response_line.selector.to_string()); // TODO: Can we use references instead?
+        match file_type {
+            ItemType::TXT => self.txt_files.push(response_line.selector.to_string()), // TODO: Can we use references instead?
+            ItemType::BIN => self.bin_files.push(response_line.selector.to_string()),
+            _ => () // Other file types note supported
+        }
+        let file_type_display = match file_type {
+            ItemType::TXT => "TXT",
+            ItemType::BIN => "BIN",
+            _ => "UNSUPPORTED FILE",
+        };
 
-        let request = Request::new(response_line.selector, 
-                response_line.server_name, 
-                response_line.server_port.parse().unwrap()
+        let request = Request::new(
+            response_line.selector, 
+            response_line.server_name, 
+            response_line.server_port.parse().unwrap()
         );
 
         let response = gopher::send_and_recv(request).map_err(|error| {
-            eprintln!("Error sending or receving TXT file: {error}");
+            eprintln!("Error sending or receving {file_type_display} file: {error}");
             error
         })?;
 
         if response.valid {
             let f = Crawler::download_file(response_line.selector, &response.buffer).map_err(|error| {
-                eprintln!("Error downloading TXT file: {error}");
+                eprintln!("Error downloading {file_type_display} file: {error}");
                 error
-            })?;
-            match f.metadata() {
-                Ok(metadata) => self.largest_txt = max(self.largest_txt, metadata.len()),
-                Err(error) => {
-                    eprintln!("Error accessing TXT file metadata: {error}");
-                    return Err(error)
-                },
-            }
-            self.ntxt += 1;
-        }
-        else {
-            self.invalid_references.push(response_line.selector.to_string());
-        }
-        Ok(())
-    }
-
-    fn handle_bin(&mut self, response_line: ResponseLine) -> std::io::Result<()> {
-        if self.has_crawled(response_line.selector) { return Ok(()) }
-
-        self.used_selectors.push(response_line.selector.to_string());
-        self.bin_files.push(response_line.selector.to_string());
-        
-        let request = Request::new(response_line.selector, 
-            response_line.server_name, 
-            response_line.server_port.parse().unwrap()
-        );
-
-        // TODO: Actually handle errors?
-        // TODO: Deal with big size?
-        let response = gopher::send_and_recv(request)
-            .map_err(|error| {
-                eprintln!("Error sending or receving BIN file: {error}");
-                error
-        })?;
-
-        if response.valid {
-            let f = Crawler::download_file(response_line.selector, &response.buffer)
-                .map_err(|error| {
-                    eprintln!("Error downloading BIN file: {error}");
-                    error
             })?;
             match f.metadata() {
                 Ok(metadata) => {
-                    self.smallest_bin = min(self.smallest_bin, metadata.len());
-                    self.largest_bin = max(self.largest_bin, metadata.len());
+                    match file_type {
+                        ItemType::TXT => {self.largest_txt = max(self.largest_txt, metadata.len());},
+                        ItemType::BIN => {
+                            self.smallest_bin = min(self.smallest_bin, metadata.len());
+                            self.largest_bin = max(self.largest_bin, metadata.len());
+                        },
+                        _ => (),
+                    }
                 },
                 Err(error) => {
-                    eprintln!("Error accessing BIN file metadata: {error}");
+                    eprintln!("Error accessing {file_type_display} file metadata: {error}");
                     return Err(error)
                 },
             }
-            self.nbin += 1;
-        } else {
+            match file_type {
+                ItemType::TXT => {self.ntxt += 1;},
+                ItemType::BIN => {self.nbin += 1;},
+                _ => (),
+            }   
+        }
+        else {
             self.invalid_references.push(response_line.selector.to_string());
         }
         Ok(())
