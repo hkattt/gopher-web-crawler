@@ -1,11 +1,37 @@
-use crate::TAB;
+use std::str;
+
+use crate::{CRLF, DOT, TAB};
+
+pub struct Response {
+    pub buffer: Vec<u8>,    // Bytes received
+    pub valid: bool,        // TODO: Explain
+}
+
+impl Response {
+    pub fn new(buffer: Vec<u8>, valid: bool) -> Response {
+        Response {
+            buffer,
+            valid,
+        }
+    }
+
+    pub fn to_response_lines<'a>(&'a self) -> Vec<Option<ResponseLine<'a>>> {
+        // Convert byte stream into a string (i.e. UTF-8 sequence)
+        let buffer = match str::from_utf8(&self.buffer) {
+            Ok(buffer) => buffer,
+            Err(error) => panic!("Ivalid UTF-8 sequence: {error}"),
+        };
+        buffer.split(CRLF).map(|line| ResponseLine::new(line)).collect()
+    }
+}
 
 pub enum ItemType {
     TXT,     // 0   Item is a text file
     DIR,     // 1   Item is a directory 
     ERR,     // 3   Item is a error
     BIN,     // 9   Item is a binary file
-    UNKNOWN, // _    Item is unknown
+    DOT,     // .   Item is a . line
+    UNKNOWN, // _   Item is unknown     
 }
 
 pub struct ResponseLine<'a> {
@@ -17,7 +43,16 @@ pub struct ResponseLine<'a> {
 
 impl<'a> ResponseLine<'a> {
     pub fn new(line: &'a str) -> Option<ResponseLine<'a>> {
-        // TODO: What if there are not 4 tabs? Result NOne
+        // Line is a single dot
+        if line.eq(DOT) {
+            return Some(
+                ResponseLine {
+                    item_type: ItemType::DOT, 
+                    selector: "", server_name: "", server_port: ""
+                }
+            );
+        }
+
         let mut parts = line.splitn(4, TAB);
 
         // TODO: Can we do this without cloning?
@@ -36,7 +71,6 @@ impl<'a> ResponseLine<'a> {
             },
             None => return None
         };
-
         Some(
             ResponseLine {
                 item_type,

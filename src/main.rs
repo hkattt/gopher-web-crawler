@@ -14,12 +14,14 @@ const STARTING_SELECTOR: &str = "";
 const SERVER_NAME: &str       = "comp3310.ddns.net";
 const SERVER_PORT: u16        = 70;
 const OUTPUT_FOLDER: &str     = "out";
-const MAX_FILENAME_LEN: usize = 255; // TODO: Can we get this from the OS somehow??
+const MAX_FILE_SIZE: usize    = 4096; // TODO: Another number?
+const MAX_FILENAME_LEN: usize = 255;  // TODO: Can we get this from the OS somehow??
 
 fn main() -> std::io::Result<()> {
     // TODO: Should we make SERVER_PORT a &str?
     let mut crawler = Crawler::new();
     // TODO: Create this with builder?
     crawler.crawl(STARTING_SELECTOR, SERVER_NAME, SERVER_PORT)?;
+    crawler.report();
     Ok(())
 }
