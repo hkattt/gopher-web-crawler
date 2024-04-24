@@ -1,15 +1,25 @@
-use std::io::{ErrorKind, Read, Write};
-use std::net::TcpStream;
-use std::time::{Duration, Instant};
+pub mod request; 
+pub mod response;
+
+use std::{
+    io::{
+        ErrorKind, 
+        Read, 
+        Write
+    },
+    net::TcpStream,
+    time::{Duration, Instant}
+};
+
+// Chrono imports for data-time functionality
 use chrono::{Local, Timelike};
 
-use request::Request;
+use self::{
+    request::Request, 
+    response::Response
+};
+
 use crate::{CRLF, MAX_CHUNK_SIZE};
-
-use self::response::Response;
-
-pub mod request;
-pub mod response;
 
 pub fn send_and_recv(request: Request) -> std::io::Result<Response> {
     // TODO: Actually handle errors

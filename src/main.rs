@@ -1,9 +1,13 @@
-use std::path::Path;
+mod crawler;
+mod gopher;
+
+use std::{
+    fs, 
+    io::ErrorKind, 
+    path::Path
+};
 
 use crawler::Crawler;
-use std::{fs, io::ErrorKind};
-
-mod crawler;
 
 // Open server on Gophie with: comp3310.ddns.net:70
 // Local host: 127.0.0.1

@@ -1,10 +1,21 @@
-mod gopher;
+use std::{
+    fs::File, 
+    io::Write, 
+    net::TcpStream, 
+    str,
+    cmp::{max, min}, 
+};
 
-use std::{cmp::{max, min}, fs::File, io::Write, net::TcpStream, str};
+// Chrono imports for data-time functionality
+use chrono::{Local, Timelike};
+
+use crate::gopher::{
+    self, 
+    request::Request, 
+    response::{ItemType, ResponseLine}
+};
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER, SERVER_NAME};
-use chrono::{Local, Timelike};
-use gopher::{request::Request, response::{ItemType, ResponseLine}};
 
 pub struct Crawler {
     ndir: u32,                             // The number of directories
