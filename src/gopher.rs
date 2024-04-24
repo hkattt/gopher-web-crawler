@@ -14,6 +14,8 @@ use std::{
 // Chrono imports for data-time functionality
 use chrono::{Local, Timelike};
 
+use circular_buffer::CircularBuffer; 
+
 use self::{
     request::Request, 
     response::Response
@@ -33,6 +35,7 @@ fn send(request: Request) -> std::io::Result<TcpStream> {
     let local_time = Local::now();
 
     // TODO: Use connect_timeout?
+    // TODO: What if connect fails
     let mut stream = TcpStream::connect(&request.server_details)?;
 
     println!("[{:02}h:{:02}m:{:02}s]: REQUESTING {} FROM {}", 
@@ -50,6 +53,8 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
     let mut buffer = Vec::new();
     let mut chunk = [0; MAX_CHUNK_SIZE];
     let mut valid = true;
+
+    let mut circular_buffer = CircularBuffer::<5, u8>::new();
     // TODO: Handle error
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
 
@@ -58,7 +63,17 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
         match stream.read(&mut chunk) {
             Ok(0) => break, 
             Ok(n) => {
-                buffer.extend_from_slice(&chunk[..n]);
+                let mut end = n;
+                for i in (0..n).rev() {
+                    circular_buffer.push_back(chunk[i]);
+                    // Found \r\n.\r\n
+                    if circular_buffer == [b'\n', b'\r', b'.', b'\n', b'\r'] {
+                        end = i + 2;
+                        break;
+                    }
+                }
+                buffer.extend_from_slice(&chunk[..end]);
+
                 if start.elapsed().as_secs() == 5 {
                     eprintln!("Read timed out");
                     valid = false;
@@ -72,7 +87,7 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
                         eprintln!("Read timed out");
                         valid = false;
                         break;
-                    }, // TODO: Make this work:()
+                    }, 
                     _ => return Err(error),
                 }
             }
