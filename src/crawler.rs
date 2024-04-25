@@ -8,6 +8,8 @@ use std::{
 // Chrono imports for data-time functionality
 use chrono::{Local, Timelike};
 
+use::debug_print::{debug_println, debug_eprintln};
+
 use crate::gopher::{
     self, 
     request::Request, 
@@ -163,7 +165,7 @@ END CRAWLER REPORT",
         // TODO: Actually handle errors
         let response = gopher::send_and_recv(&request)
             .map_err(|error| {
-                eprintln!("Problem sending OR receving request: {error}");
+                debug_eprintln!("Problem sending OR receving request: {error}");
                 error
         })?;
 
@@ -172,7 +174,7 @@ END CRAWLER REPORT",
                 for response_line in response.to_response_lines() {
                     if let Some(response_line) = response_line {
                         self.process_response_line(response_line).map_err(|error| {
-                            eprintln!("Problem processing response line: {error}");
+                            debug_eprintln!("Problem processing response line: {error}");
                             error
                         })?;
                     } else {()} // Malformed request line (e.g. empty String)
@@ -207,7 +209,7 @@ END CRAWLER REPORT",
         // TODO: Replace the string stuff with global variables?
         let file_path = [OUTPUT_FOLDER, "/", &file_name].concat();
         let mut f = File::create(file_path).map_err(|error| {
-            eprintln!("Unable to create new file: {error}");
+            debug_eprintln!("Unable to create new file: {error}");
             error
         })?;
         f.write_all(buffer)?;
@@ -223,14 +225,14 @@ END CRAWLER REPORT",
             // TODO: Use format everywhere
             match gopher::connect(&format!("{}:{}", response_line.server_name, response_line.server_port)) {
                 Ok(_) => {
-                    println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
+                    debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
                     self.external_servers.push((response_line.server_name.to_string(), true));
                     return Ok(())
                 },
                 Err(_) => {
-                    println!("[{:02}h:{:02}m:{:02}s]: FAILED TO CONNECT TO EXTERNAL {} ON {}", 
+                    debug_println!("[{:02}h:{:02}m:{:02}s]: FAILED TO CONNECT TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
                     self.external_servers.push((response_line.server_name.to_string(), false));
@@ -267,14 +269,14 @@ END CRAWLER REPORT",
         );
 
         let response = gopher::send_and_recv(&request).map_err(|error| {
-            eprintln!("Error sending or receving {file_type_display} file: {error}");
+            debug_eprintln!("Error sending or receving {file_type_display} file: {error}");
             error
         })?;
 
         match response.response_outcome {
             ResponseOutcome::Complete => {
                 let f = Crawler::download_file(response_line.selector, &response.buffer).map_err(|error| {
-                    eprintln!("Error downloading {file_type_display} file: {error}");
+                    debug_eprintln!("Error downloading {file_type_display} file: {error}");
                     error
                 })?;
                 match f.metadata() {
@@ -308,7 +310,7 @@ END CRAWLER REPORT",
                         }
                     },
                     Err(error) => {
-                        eprintln!("Error accessing {file_type_display} file metadata: {error}");
+                        debug_eprintln!("Error accessing {file_type_display} file metadata: {error}");
                         return Err(error)
                     },
                 }

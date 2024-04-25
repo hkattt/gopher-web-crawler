@@ -28,6 +28,7 @@ const MAX_FILENAME_LEN: usize = 255;  // TODO: Can we get this from the OS someh
 // TODO: What about malformed1
 // TODO: Debug mode
 // TODO: Command line arguments: debug, server, remove directory
+// TODO: Compile in release mode
 
 fn main() -> std::io::Result<()> {
     // Create output directory to store files

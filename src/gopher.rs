@@ -1,6 +1,8 @@
 pub mod request; 
 pub mod response;
 
+use::debug_print::{debug_println, debug_eprintln};
+
 use std::{
     io::{
         self, 
@@ -27,12 +29,12 @@ pub fn send_and_recv(request: &Request) -> std::io::Result<Response> {
         Ok(stream) => stream,
         Err(error) => match error.kind() {
             io::ErrorKind::InvalidInput => {
-                eprintln!("Malformed server details: {error}");
+                debug_eprintln!("Malformed server details: {error}");
                 // TODO: Different outcome for this?
                 return Ok(Response {buffer: Vec::new(), response_outcome: ResponseOutcome::ConnectionFailed})
             },
             io::ErrorKind::AddrNotAvailable => {
-                eprintln!("Provided host or port is not available: {error}");
+                debug_eprintln!("Provided host or port is not available: {error}");
                 return Ok(Response {buffer: Vec::new(), response_outcome: ResponseOutcome::ConnectionFailed})
             },
             _ => return Err(error),
@@ -60,7 +62,7 @@ pub fn connect(server_details: &str) -> std::io::Result<TcpStream> {
     // Get the current local time
     let local_time = Local::now();
 
-    println!("[{:02}h:{:02}m:{:02}s]: CONNECTING TO {}", 
+    debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTING TO {}", 
         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
         server_details
     );
@@ -96,7 +98,7 @@ fn recv(mut stream: &TcpStream, item_type: &ItemType) -> std::io::Result<Respons
                 buffer.extend_from_slice(&chunk[..n]);
 
                 if start.elapsed().as_secs() == 5 {
-                    eprintln!("File too long");
+                    debug_eprintln!("File too long");
                     return Ok(Response::new(buffer, ResponseOutcome::FileTooLong));
                 }
             }
@@ -104,7 +106,7 @@ fn recv(mut stream: &TcpStream, item_type: &ItemType) -> std::io::Result<Respons
                 match error.kind() {
                     ErrorKind::Interrupted => continue,
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
-                        eprintln!("Read timed out");
+                        debug_eprintln!("Read timed out");
                         return Ok(Response::new(buffer, ResponseOutcome::Timeout));
                     }, 
                     _ => return Err(error),
