@@ -13,11 +13,11 @@ pub enum ResponseOutcome {
 impl ToString for ResponseOutcome {
     fn to_string(&self) -> String {
         match self {
-            ResponseOutcome::Complete => String::from("Completed sucessfully"),
-            ResponseOutcome::Timeout  => String::from("Connection timed out"),
-            ResponseOutcome::FileTooLong => String::from("File too long"),
+            ResponseOutcome::Complete         => String::from("Completed sucessfully"),
+            ResponseOutcome::Timeout          => String::from("Connection timed out"),
+            ResponseOutcome::FileTooLong      => String::from("File too long"),
             ResponseOutcome::ConnectionFailed => String::from("Failed to connect"),
-            ResponseOutcome::MissingEndLine => String::from("Missing end-line"),
+            ResponseOutcome::MissingEndLine   => String::from("Missing end-line"),
         }
     }
 }
@@ -42,13 +42,24 @@ impl Response {
     }
 }
 
-// TODO: Change to lower case?
 pub enum ItemType {
-    TXT,     // 0   Item is a text file
-    DIR,     // 1   Item is a directory 
-    ERR,     // 3   Item is a error
-    BIN,     // 9   Item is a binary file
-    UNKNOWN, // _   Item is unknown     
+    Txt,     // 0   Item is a text file
+    Dir,     // 1   Item is a directory 
+    Err,     // 3   Item is a error
+    Bin,     // 9   Item is a binary file
+    Unknown, // _   Item is unknown     
+}
+
+impl ToString for ItemType {
+    fn to_string(&self) -> String {
+        match self {
+            ItemType::Txt     => String::from("TXT"),
+            ItemType::Dir     => String::from("DIR"),
+            ItemType::Err     => String::from("ERR"),
+            ItemType::Bin     => String::from("BIN"),
+            ItemType::Unknown => String::from("UNKNOWN"),
+        }
+    }
 }
 
 pub struct ResponseLine<'a> {
@@ -67,13 +78,13 @@ impl<'a> ResponseLine<'a> {
 
         let user_display_string = parts.next().unwrap();
         
-        let mut item_type = ItemType::UNKNOWN;
+        let mut item_type = ItemType::Unknown;
         match user_display_string.chars().next() {
             Some(i) => match i {
-                '0' => item_type = ItemType::TXT,
-                '1' => item_type = ItemType::DIR,
-                '3' => item_type = ItemType::ERR,
-                '9' => item_type = ItemType::BIN,
+                '0' => item_type = ItemType::Txt,
+                '1' => item_type = ItemType::Dir,
+                '3' => item_type = ItemType::Err,
+                '9' => item_type = ItemType::Bin,
                 _   => ()
             },
             None => return None
