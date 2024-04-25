@@ -2,16 +2,23 @@ use std::str;
 
 use crate::{CRLF, DOT, TAB};
 
+pub enum ResponseOutcome {
+    Complete,
+    Timeout,
+    FileTooLong,
+    ConnectionFailed,
+}
+
 pub struct Response {
     pub buffer: Vec<u8>,    // Bytes received
-    pub valid: bool,        // TODO: Explain
+    pub response_outcome: ResponseOutcome,        // TODO: Explain
 }
 
 impl Response {
-    pub fn new(buffer: Vec<u8>, valid: bool) -> Response {
+    pub fn new(buffer: Vec<u8>, response_outcome: ResponseOutcome) -> Response {
         Response {
             buffer,
-            valid,
+            response_outcome,
         }
     }
 

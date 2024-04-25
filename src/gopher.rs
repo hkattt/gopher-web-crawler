@@ -18,19 +18,19 @@ use circular_buffer::CircularBuffer;
 
 use self::{
     request::Request, 
-    response::Response
+    response::{Response, ResponseOutcome}
 };
 
 use crate::{CRLF, MAX_CHUNK_SIZE};
 
-pub fn send_and_recv(request: Request) -> std::io::Result<Response> {
+pub fn send_and_recv(request: &Request) -> std::io::Result<Response> {
     // TODO: Actually handle errors
     let stream = send(request)?;
     let response = recv(stream)?;
     Ok(response)
 }
 
-fn send(request: Request) -> std::io::Result<TcpStream> {
+fn send(request: &Request) -> std::io::Result<TcpStream> {
     // Get the current local time
     let local_time = Local::now();
 
@@ -52,7 +52,7 @@ fn send(request: Request) -> std::io::Result<TcpStream> {
 fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
     let mut buffer = Vec::new();
     let mut chunk = [0; MAX_CHUNK_SIZE];
-    let mut valid = true;
+    let mut response_outcome = ResponseOutcome::Complete;
 
     let mut circular_buffer = CircularBuffer::<5, u8>::new();
     // TODO: Handle error
@@ -66,17 +66,22 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
                 let mut end = n;
                 for i in (0..n).rev() {
                     circular_buffer.push_back(chunk[i]);
-                    // Found \r\n.\r\n
-                    if circular_buffer == [b'\n', b'\r', b'.', b'\n', b'\r'] {
-                        end = i + 2;
+                    // TODO: What about: circular_buffer == [b'\n', b'\r', b'.', b'\n', b'\r']
+                    // Found .\r\n
+                    if circular_buffer == [b'\n', b'\r', b'.'] {
+                        // end = i + 2; TODO WHAT ABOUT THIS
+                        end = i;
                         break;
                     }
                 }
                 buffer.extend_from_slice(&chunk[..end]);
+                if end != n {
+                    break;
+                }
 
                 if start.elapsed().as_secs() == 5 {
-                    eprintln!("Read timed out");
-                    valid = false;
+                    eprintln!("File too long");
+                    response_outcome = ResponseOutcome::FileTooLong;
                     break;
                 }
             }
@@ -85,7 +90,7 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
                     ErrorKind::Interrupted => continue,
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
                         eprintln!("Read timed out");
-                        valid = false;
+                        response_outcome = ResponseOutcome::Timeout;
                         break;
                     }, 
                     _ => return Err(error),
@@ -93,5 +98,5 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
             }
         }
     }
-    Ok(Response::new(buffer, valid))
+    Ok(Response::new(buffer, response_outcome))
 }
