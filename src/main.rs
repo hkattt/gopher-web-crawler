@@ -2,6 +2,7 @@ mod crawler;
 mod gopher;
 
 use std::{
+    env, 
     fs::{self, remove_dir_all}, 
     io::ErrorKind, 
     path::Path
@@ -27,24 +28,60 @@ const MAX_FILENAME_LEN: usize = 255;  // TODO: Can we get this from the OS someh
 // TODO: What is up with invalid 0
 // TODO: What about malformed1
 // TODO: Debug mode
-// TODO: Command line arguments: debug, server, remove directory
-// TODO: Compile in release mode
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Default arguments
+    let mut server_name = SERVER_NAME.to_string();
+    let mut server_port = SERVER_PORT;
+    let mut remove_dirs = true;
+
+    let mut args_iter = env::args().skip(1);
+    while let Some(arg) = args_iter.next() {
+        match arg.as_str() {
+            // Server name argument
+            "-n" => {
+                server_name = args_iter.next().ok_or("Missing server name after -n")?;
+            }
+            // Server port argument
+            "-p" => {
+                let port_str = args_iter.next().ok_or("Missing server port after -p")?;
+                server_port = match port_str.parse() {
+                    Ok(port) => port,
+                    Err(_) => {
+                        eprintln!("Server port must be an integer");
+                        return Ok(())
+                    }
+                };
+            }
+            // Directory delete argument
+            "-d" => {
+                remove_dirs = false;
+            }
+            // Invalid argument
+            _ => {
+                eprintln!("Usage: gopher [-n server name] [-p server port] [-d]");
+                return Ok(())
+            }
+        }
+    }
+
     // Create output directory to store files
     if let Err(error) = fs::create_dir(Path::new(&OUTPUT_FOLDER)) {
         if error.kind() != ErrorKind::AlreadyExists {
             panic!("Unable to create output folder: {error}");
         }
     }
+
     // TODO: Should we make SERVER_PORT a &str?
     let mut crawler = Crawler::new();
     // TODO: Create this with builder?
-    crawler.crawl(STARTING_SELECTOR, SERVER_NAME, SERVER_PORT)?;
+    crawler.crawl(STARTING_SELECTOR, &server_name, server_port)?;
     crawler.report();
 
     // Remove output directory and all of its contents
-    remove_dir_all(OUTPUT_FOLDER)?;
+    if remove_dirs {
+        remove_dir_all(OUTPUT_FOLDER)?;
+    }
 
     Ok(())
 }
