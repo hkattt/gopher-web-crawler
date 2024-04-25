@@ -144,6 +144,7 @@ END CRAWLER REPORT",
                         ResponseOutcome::ConnectionFailed => "connection failed",
                         ResponseOutcome::FileTooLong => "file too long",
                         ResponseOutcome::Timeout => "response timed out",
+                        ResponseOutcome::MissingEndLine => "missing end-line character",
                         _ => ""
                     };
                     [server_details, ": ", invalid_reference, " ", response_outcome].concat()
@@ -154,12 +155,10 @@ END CRAWLER REPORT",
     }
 
     pub fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
-        let request = Request::new(selector, server_name, server_port);
+        let request = Request::new(selector, server_name, server_port, ItemType::DIR);
         
         // TODO: avoid clone
         self.used.push((server_name.to_string(), server_port, selector.to_string()));
-        self.dirs.push((request.server_details.clone(), selector.to_string()));
-        self.ndir += 1;
 
         // TODO: Actually handle errors
         let response = gopher::send_and_recv(&request)
@@ -178,6 +177,8 @@ END CRAWLER REPORT",
                         })?;
                     } else {()} // Malformed request line (e.g. empty String)
                 }
+                self.dirs.push((request.server_details.clone(), selector.to_string()));
+                self.ndir += 1;
             }
             _ => {
                 self.invalid_references.push((request.server_details.clone(), selector.to_string(), response.response_outcome));
@@ -261,7 +262,8 @@ END CRAWLER REPORT",
         let request = Request::new(
             response_line.selector, 
             response_line.server_name, 
-            response_line.server_port.parse().unwrap()
+            response_line.server_port.parse().unwrap(),
+            file_type,
         );
 
         let response = gopher::send_and_recv(&request).map_err(|error| {
@@ -278,7 +280,7 @@ END CRAWLER REPORT",
                 match f.metadata() {
                     Ok(metadata) => {
                         let file_size = metadata.len();
-                        match file_type {
+                        match request.item_type {
                             ItemType::TXT => {
                                 if file_size > self.largest_txt {
                                     self.largest_txt = file_size;
@@ -308,7 +310,7 @@ END CRAWLER REPORT",
                         return Err(error)
                     },
                 }
-                match file_type {
+                match request.item_type {
                     ItemType::TXT => {
                         self.ntxt += 1;
                         self.txt_files.push((request.server_details.clone(), response_line.selector.to_string())); // TODO: Can we use references instead?

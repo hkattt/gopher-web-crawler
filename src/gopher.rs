@@ -15,11 +15,9 @@ use std::{
 // Chrono imports for data-time functionality
 use chrono::{Local, Timelike};
 
-use circular_buffer::CircularBuffer; 
-
 use self::{
     request::Request, 
-    response::{Response, ResponseOutcome}
+    response::{ItemType, Response, ResponseOutcome}
 };
 
 use crate::{CRLF, MAX_CHUNK_SIZE};
@@ -54,7 +52,7 @@ pub fn send_and_recv(request: &Request) -> std::io::Result<Response> {
     stream.write_all(selector.as_bytes())?; // TODO: Handle error
 
     // Receive the request from the Gopher server
-    let response = recv(stream)?; // TODO: Handle error
+    let response = recv(&stream, &request.item_type)?; // TODO: Handle error
     return Ok(response)
 }
 
@@ -83,12 +81,10 @@ pub fn connect(server_details: &str) -> std::io::Result<TcpStream> {
     ))
 }
 
-fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
+fn recv(mut stream: &TcpStream, item_type: &ItemType) -> std::io::Result<Response> {
     let mut buffer = Vec::new();
     let mut chunk = [0; MAX_CHUNK_SIZE];
-    let mut response_outcome = ResponseOutcome::Complete;
 
-    let mut circular_buffer = CircularBuffer::<5, u8>::new();
     // TODO: Handle error
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
 
@@ -97,26 +93,11 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
         match stream.read(&mut chunk) {
             Ok(0) => break, 
             Ok(n) => {
-                let mut end = n;
-                for i in (0..n).rev() {
-                    circular_buffer.push_back(chunk[i]);
-                    // TODO: What about: circular_buffer == [b'\n', b'\r', b'.', b'\n', b'\r']
-                    // Found .\r\n
-                    if circular_buffer == [b'\n', b'\r', b'.'] {
-                        // end = i + 2; TODO WHAT ABOUT THIS
-                        end = i;
-                        break;
-                    }
-                }
-                buffer.extend_from_slice(&chunk[..end]);
-                if end != n {
-                    break;
-                }
+                buffer.extend_from_slice(&chunk[..n]);
 
                 if start.elapsed().as_secs() == 5 {
                     eprintln!("File too long");
-                    response_outcome = ResponseOutcome::FileTooLong;
-                    break;
+                    return Ok(Response::new(buffer, ResponseOutcome::FileTooLong));
                 }
             }
             Err(error) => {
@@ -124,13 +105,23 @@ fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
                     ErrorKind::Interrupted => continue,
                     ErrorKind::TimedOut | ErrorKind::WouldBlock => {
                         eprintln!("Read timed out");
-                        response_outcome = ResponseOutcome::Timeout;
-                        break;
+                        return Ok(Response::new(buffer, ResponseOutcome::Timeout));
                     }, 
                     _ => return Err(error),
                 }
             }
         }
     }
-    Ok(Response::new(buffer, response_outcome))
+
+    if matches!(*item_type, ItemType::TXT) || matches!(*item_type, ItemType::DIR){
+        if buffer.len() < 3 {
+            Ok(Response::new(buffer, ResponseOutcome::MissingEndLine))
+        } else if buffer.iter().rev().take(3).eq(&[b'\n', b'\r', b'.']) {
+            Ok(Response::new(buffer, ResponseOutcome::Complete))
+        } else {
+            Ok(Response::new(buffer, ResponseOutcome::MissingEndLine))
+        }
+    } else {
+        Ok(Response::new(buffer, ResponseOutcome::Complete))
+    }
 }

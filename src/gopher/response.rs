@@ -7,6 +7,7 @@ pub enum ResponseOutcome {
     Timeout,
     FileTooLong,
     ConnectionFailed,
+    MissingEndLine,
 }
 
 pub struct Response {
@@ -29,6 +30,7 @@ impl Response {
     }
 }
 
+// TODO: Change to lower case?
 pub enum ItemType {
     TXT,     // 0   Item is a text file
     DIR,     // 1   Item is a directory 
