@@ -118,7 +118,7 @@ fn recv(mut stream: &TcpStream, item_type: &ItemType) -> std::io::Result<Respons
         }
     }
 
-    if matches!(*item_type, ItemType::TXT) || matches!(*item_type, ItemType::DIR){
+    if matches!(*item_type, ItemType::Txt) || matches!(*item_type, ItemType::Dir){
         if buffer.len() < 3 {
             Ok(Response::new(buffer, ResponseOutcome::MissingEndLine))
         } else if buffer.iter().rev().take(3).eq(&[b'\n', b'\r', b'.']) {
