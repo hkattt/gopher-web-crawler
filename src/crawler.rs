@@ -15,7 +15,7 @@ use::debug_print::{debug_println, debug_eprintln};
 use crate::gopher::{
     self, 
     request::Request, 
-    response::{ItemType, ResponseLine, ResponseOutcome}
+    response::{ItemType, ResponseLine, ResponseOutcome, ResponseLineError}
 };
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
@@ -164,12 +164,33 @@ impl Crawler {
         match response.response_outcome {
             ResponseOutcome::Complete => {
                 for response_line in response.to_response_lines() {
-                    if let Some(response_line) = response_line {
-                        self.process_response_line(response_line).map_err(|error| {
-                            debug_eprintln!("Problem processing response line: {error}");
-                            error
-                        })?;
-                    } else {()} // Malformed request line (e.g. empty String)
+                    match response_line {
+                        Ok(response_line) => {
+                            self.process_response_line(response_line).map_err(|error| {
+                                debug_eprintln!("Problem processing response line: {error}");
+                                error
+                            })?;
+                        },
+                        Err(error) => {
+                            match error {
+                                ResponseLineError::Empty => (),
+                                // TODO: Fix this man
+                                ResponseLineError::InvalidParts(line) => {
+                                    self.invalid_references.push((line, String::from(""), ResponseOutcome::MalformedResponseLine));
+                                    // TODO: What are we doing with these?
+                                },
+                                ResponseLineError::EmptyDisplayString(line) => {
+                                    self.invalid_references.push((line, String::from(""), ResponseOutcome::MalformedResponseLine));
+                                },
+                                ResponseLineError::EmptyHost(server_name, server_port, selector) => {
+                                    self.invalid_references.push((format!("{}:{}", server_name, server_port), selector, ResponseOutcome::MalformedResponseLine));
+                                }, 
+                                ResponseLineError::NonIntPort(server_name, server_port, selector) => {
+                                    self.invalid_references.push((format!("{}:{}", server_name, server_port), selector, ResponseOutcome::MalformedResponseLine));
+                                },
+                            }
+                        }
+                    }
                 }
                 self.dirs.push((request.server_details.clone(), selector.to_string()));
                 self.ndir += 1;
@@ -178,7 +199,6 @@ impl Crawler {
                 self.invalid_references.push((request.server_details.clone(), selector.to_string(), response.response_outcome));
             }
         }
-        
         Ok(())
     }
 
