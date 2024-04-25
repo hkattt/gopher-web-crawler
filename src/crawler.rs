@@ -1,6 +1,6 @@
 use std::{
     cmp::min, 
-    fs::File, 
+    fs::{File, Metadata}, 
     io::Write, 
     str 
 };
@@ -18,7 +18,7 @@ use crate::gopher::{
     response::{ItemType, ResponseLine, ResponseOutcome}
 };
 
-use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER, SERVER_NAME};
+use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
 
 pub struct Crawler {
     ndir: u32,                                           // The number of directories
@@ -43,7 +43,7 @@ pub struct Crawler {
     largest_bin_selector: (String, String),              // The selector of the largest binary file
     
     nerr: u32,                                           // The number of unique invalid references (error types)
-    external_servers: Vec<(String, bool)>,               // List of external servers and if they accepted a connection
+    external_servers: Vec<(String, u16, bool)>,               // TODO: Fix List of external servers and if they accepted a connection
     invalid_references: Vec<(String, String, ResponseOutcome)>,  // List of references that have "issues/errors" that had be explicitly dealt with
     used: Vec<(String, u16, String)>,                         // Used (server name, server port, selector)
 }
@@ -51,6 +51,7 @@ pub struct Crawler {
 impl Default for Crawler {
     fn default() -> Crawler {
         Crawler {
+
             ndir: 0,   
             dirs: Vec::new(),
             
@@ -86,74 +87,69 @@ impl Crawler {
     }
 
     pub fn report(&self) {
-        let server_selector_display = 
-            |(server_details, selector): &(String, String)| format!("{server_details}: {selector}");
+        let format_server_selector = |(server_details, selector): &(String, String)| {
+            format!("{server_details}: {selector}")
+        };
+    
+        let format_external_server = |(server_name, server_port, conn_result): &(String, u16, bool)| {
+            let status = if *conn_result {
+                "connected successfully"
+            } else {
+                "did not connect"
+            };
+            format!("{}:{} {}", server_name, *server_port, status)
+        };
+    
+        let format_invalid_reference = |(server_details, invalid_reference, response_outcome): &(String, String, ResponseOutcome)| {
+            format!("{} {}: {}", response_outcome.to_string(), server_details, invalid_reference)
+        };
+
         println!(
-"\nSTART CRAWLER REPORT\n
-\tNumber of Gopher directories: {}
-\t\t{}\n
-\tNumber of simple text files: {}
-\t\t{}\n
-\tNumber of binary files: {}
-\t\t{}\n
-\tSmallest text file: {}
-\t\tSize: {} bytes
-\t\tContents: {}\n
-\tSize of the largest text file: {} bytes
-\t\t{}\n
-\tSize of the smallest binary file: {} bytes
-\t\t{}\n
-\tSize of the largest binary file: {} bytes
-\t\t{}\n
-\tThe number of unique invalid references (error types): {}\n
-\tList of external servers: 
-\t\t{}\n
-\tReferences that have issues/errors: 
-\t\t{}\n
-END CRAWLER REPORT",
+            "\nSTART CRAWLER REPORT\n\n\
+            \tNumber of Gopher directories: {}\n\
+            \t\t{}\n\n\
+            \tNumber of simple text files: {}\n\
+            \t\t{}\n\n\
+            \tNumber of binary files: {}\n\
+            \t\t{}\n\n\
+            \tSmallest text file: {}\n\
+            \t\tSize: {} bytes\n\
+            \t\tContents: {}\n\n\
+            \tSize of the largest text file: {} bytes\n\
+            \t\t{}\n\n\
+            \tSize of the smallest binary file: {} bytes\n\
+            \t\t{}\n\n\
+            \tSize of the largest binary file: {} bytes\n\
+            \t\t{}\n\n\
+            \tThe number of unique invalid references (error types): {}\n\n\
+            \tList of external servers:\n\
+            \t\t{}\n\n\
+            \tReferences that have issues/errors:\n\
+            \t\t{}\n\n\
+            END CRAWLER REPORT",
             self.ndir,
-            self.dirs.iter()
-                .map(server_selector_display)
-                .collect::<Vec<String>>()
-                .join("\n\t\t"),
+            self.dirs.iter().map(format_server_selector).collect::<Vec<_>>().join("\n\t\t"),
             self.ntxt,
-            self.txt_files.iter()
-                .map(server_selector_display)
-                .collect::<Vec<String>>()
-                .join("\n\t\t"),
+            self.txt_files.iter().map(format_server_selector).collect::<Vec<_>>().join("\n\t\t"),
             self.nbin,
-            self.bin_files.iter()
-                .map(server_selector_display)
-                .collect::<Vec<String>>()
-                .join("\n\t\t"),
-            server_selector_display(&self.smallest_txt_selector),
+            self.bin_files.iter().map(format_server_selector).collect::<Vec<_>>().join("\n\t\t"),
+            format_server_selector(&self.smallest_txt_selector),
             self.smallest_txt,
             self.smallest_contents,
             self.largest_txt,
-            server_selector_display(&self.largest_txt_selector),
+            format_server_selector(&self.largest_txt_selector),
             self.smallest_bin,
-            server_selector_display(&self.smallest_bin_selector),
+            format_server_selector(&self.smallest_bin_selector),
             self.largest_bin,
-            server_selector_display(&self.largest_bin_selector),
+            format_server_selector(&self.largest_bin_selector),
             self.nerr,
-            self.external_servers.iter()
-                .map(|(external_server, conn_result)| {
-                    let conn_result = if *conn_result {"connected successfully"} else {"did not connect"};
-                    format!("{external_server}: {conn_result}")
-                })
-                .collect::<Vec<String>>()
-                .join("\n\t\t"),
-            self.invalid_references.iter()
-                .map(|(server_details, invalid_reference, response_outcome)| {
-                    format!("{} {}: {}", response_outcome.to_string(), server_details, invalid_reference)
-                })
-                .collect::<Vec<String>>()
-                .join("\n\t\t"),
-        )
+            self.external_servers.iter().map(format_external_server).collect::<Vec<_>>().join("\n\t\t"),
+            self.invalid_references.iter().map(format_invalid_reference).collect::<Vec<_>>().join("\n\t\t"),
+        );
     }
 
     pub fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
-        let request = Request::new(selector, server_name, server_port, ItemType::DIR);
+        let request = Request::new(selector, server_name, server_port, ItemType::Dir);
         
         // TODO: avoid clone
         self.used.push((server_name.to_string(), server_port, selector.to_string()));
@@ -188,34 +184,19 @@ END CRAWLER REPORT",
 
     fn process_response_line(&mut self, response_line: ResponseLine) -> std::io::Result<()> {    
         match response_line.item_type {
-            ItemType::TXT => self.handle_supported_file(response_line, ItemType::TXT)?,
-            ItemType::DIR => self.handle_dir(response_line)?,
-            ItemType::ERR => self.nerr += 1,
-            ItemType::BIN => self.handle_supported_file(response_line, ItemType::BIN)?,
-            ItemType::UNKNOWN => (), // TODO: Should we do anything else?
+            ItemType::Txt => self.handle_file(response_line, ItemType::Txt)?,
+            ItemType::Dir => self.handle_dir(response_line)?,
+            ItemType::Err => self.nerr += 1,
+            ItemType::Bin => self.handle_file(response_line, ItemType::Bin)?,
+            ItemType::Unknown => (), 
         }
         Ok(())
     }
 
-    fn download_file(selector: &str, buffer: &[u8]) -> std::io::Result<File> {
-        // Remove the / prefix from the selector. Truncate long selector names
-        let file_name = &selector[1..min(selector.len(), MAX_FILENAME_LEN + 1)];
-        // Replace forward slashes with dashes to create a valid file name
-        let file_name = file_name.replace("/", "-");
-        // TODO: Replace the string stuff with global variables?
-        let file_path = format!("{}/{}", OUTPUT_FOLDER, &file_name);
-        let mut f = File::create(file_path).map_err(|error| {
-            debug_eprintln!("Unable to create new file: {error}");
-            error
-        })?;
-        f.write_all(buffer)?;
-        Ok(f)
-    }
-
     fn handle_dir(&mut self, response_line: ResponseLine) -> std::io::Result<()> {
-        if response_line.server_name != SERVER_NAME {
-            // TODO: Handle external servers
-            // Only need to try connecting
+        // External server
+        // External server is anything with a different server name OR a different port 
+        if response_line.server_name != self.root_server_name() || response_line.server_port != self.root_server_port().to_string() {
             // Get the current local time
             #[allow(unused_variables)]
             let local_time = Local::now();
@@ -225,14 +206,15 @@ END CRAWLER REPORT",
                     debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
-                    self.external_servers.push((response_line.server_name.to_string(), true));
+                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), true));
                     return Ok(())
                 },
                 Err(_) => {
                     debug_println!("[{:02}h:{:02}m:{:02}s]: FAILED TO CONNECT TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
-                    self.external_servers.push((response_line.server_name.to_string(), false));
+                    // TODO: Should we just pass string server_port?
+                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), false));
                     return Ok(())
                 },
             }
@@ -247,18 +229,11 @@ END CRAWLER REPORT",
         Ok(())
     }
 
-    fn handle_supported_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
+    fn handle_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
         if self.has_crawled(response_line.server_name, response_line.server_port.parse().unwrap(), response_line.selector) { return Ok(()) }
         
         self.used.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), response_line.selector.to_string()));
         
-        #[allow(unused_variables)]
-        let file_type_display = match file_type {
-            ItemType::TXT => "TXT",
-            ItemType::BIN => "BIN",
-            _ => "UNSUPPORTED FILE",
-        };
-
         let request = Request::new(
             response_line.selector, 
             response_line.server_name, 
@@ -267,61 +242,22 @@ END CRAWLER REPORT",
         );
 
         let response = gopher::send_and_recv(&request).map_err(|error| {
-            debug_eprintln!("Error sending or receving {file_type_display} file: {error}");
+            debug_eprintln!("Error sending or receving {} file: {}", request.item_type.to_string(), error);
             error
         })?;
 
         match response.response_outcome {
             ResponseOutcome::Complete => {
                 let f = Crawler::download_file(response_line.selector, &response.buffer).map_err(|error| {
-                    debug_eprintln!("Error downloading {file_type_display} file: {error}");
+                    debug_eprintln!("Error downloading {} file: {}", request.item_type.to_string(), error);
                     error
                 })?;
                 match f.metadata() {
-                    Ok(metadata) => {
-                        let file_size = metadata.len();
-                        match request.item_type {
-                            ItemType::TXT => {
-                                if file_size > self.largest_txt {
-                                    self.largest_txt = file_size;
-                                    // TODO: Can we use references instead?
-                                    self.largest_txt_selector = (request.server_details.clone(), response_line.selector.to_string());
-                                }
-                                if file_size < self.smallest_txt {
-                                    self.smallest_txt = file_size;
-                                    self.smallest_txt_selector = (request.server_details.clone(), response_line.selector.to_string());
-                                    // TODO: Use the file instead?? might not be worth
-                                    self.smallest_contents = str::from_utf8(&response.buffer).expect("Ivalid UTF-8 sequence").to_string();  // TODO: Handle error??f.bytes().
-                                }
-                            },
-                            ItemType::BIN => {
-                                if file_size > self.largest_bin {
-                                    self.largest_bin = file_size;
-                                    self.largest_bin_selector = (request.server_details.clone(), response_line.selector.to_string());
-                                }
-                                if file_size < self.smallest_bin {
-                                    self.smallest_bin = file_size;
-                                    self.smallest_bin_selector = (request.server_details.clone(), response_line.selector.to_string());
-                                }
-                            },
-                            _ => (),
-                        }
-                    },
+                    Ok(metadata) => self.update_file_stats(metadata, &request, &response.buffer),
                     Err(error) => {
-                        debug_eprintln!("Error accessing {file_type_display} file metadata: {error}");
+                        debug_eprintln!("Error accessing {} file metadata: {}", request.item_type.to_string(), error);
                         return Err(error)
-                    },
-                }
-                match request.item_type {
-                    ItemType::TXT => {
-                        self.ntxt += 1;
-                        self.txt_files.push((request.server_details.clone(), response_line.selector.to_string())); // TODO: Can we use references instead?
-                    },
-                    ItemType::BIN => {
-                        self.nbin += 1;
-                        self.bin_files.push((request.server_details.clone(), response_line.selector.to_string())); // TODO: Can we use references instead of clone and to_string?
-                    },
-                    _ => (),
+                    }
                 }
             }
             _ => {
@@ -331,6 +267,44 @@ END CRAWLER REPORT",
         Ok(())
     }
 
+    fn update_file_stats(&mut self, file_metadata: Metadata, request: &Request, buffer: &Vec<u8>) {
+        let file_size = file_metadata.len();
+        match request.item_type {
+            ItemType::Txt => {
+                self.ntxt += 1;
+                self.txt_files.push((request.server_details.clone(), request.selector.to_string())); // TODO: Can we use references instead?
+
+                if file_size > self.largest_txt {
+                    self.largest_txt = file_size;
+                    // TODO: Can we use references instead?
+                    self.largest_txt_selector = (request.server_details.clone(), request.selector.to_string());
+                }
+
+                if file_size < self.smallest_txt {
+                    self.smallest_txt = file_size;
+                    self.smallest_txt_selector = (request.server_details.clone(), request.selector.to_string());
+                    // TODO: Use the file instead?? might not be worth
+                    self.smallest_contents = str::from_utf8(buffer).expect("Ivalid UTF-8 sequence").to_string();  // TODO: Handle error??f.bytes().
+                }
+            },
+            ItemType::Bin => {
+                self.nbin += 1;
+                self.bin_files.push((request.server_details.clone(), request.selector.to_string())); // TODO: Can we use references instead of clone and to_string?
+
+                if file_size > self.largest_bin {
+                    self.largest_bin = file_size;
+                    self.largest_bin_selector = (request.server_details.clone(), request.selector.to_string());
+                }
+
+                if file_size < self.smallest_bin {
+                    self.smallest_bin = file_size;
+                    self.smallest_bin_selector = (request.server_details.clone(), request.selector.to_string());
+                }
+            },
+            _ => (),
+        }
+    }
+
     fn has_crawled(&self, server_details: &str, server_port: u16, selector: &str) -> bool {
         self.used.iter()
             .any(|(used_server_details, used_server_port, used_selector)| {
@@ -338,5 +312,29 @@ END CRAWLER REPORT",
                 *used_server_port == server_port &&
                 used_selector == selector
         })
+    }
+
+    fn root_server_name(&self) -> &String {
+        &self.used[0].0
+    }
+
+    fn root_server_port(&self) -> u16 {
+        self.used[0].1
+    }
+
+    // TODO: Should this use self or???
+    fn download_file(selector: &str, buffer: &[u8]) -> std::io::Result<File> {
+        // Remove the / prefix from the selector. Truncate long selector names
+        let file_name = &selector[1..min(selector.len(), MAX_FILENAME_LEN + 1)];
+        // Replace forward slashes with dashes to create a valid file name
+        let file_name = file_name.replace("/", "-");
+        // TODO: Replace the string stuff with global variables?
+        let file_path = format!("{}/{}", OUTPUT_FOLDER, &file_name);
+        let mut f = File::create(file_path).map_err(|error| {
+            debug_eprintln!("Unable to create new file: {error}");
+            error
+        })?;
+        f.write_all(buffer)?;
+        Ok(f)
     }
 }
