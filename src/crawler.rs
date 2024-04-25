@@ -1,7 +1,6 @@
 use std::{
     fs::File, 
     io::Write, 
-    net::TcpStream, 
     str,
     cmp::min, 
 };
@@ -42,7 +41,7 @@ pub struct Crawler {
     nerr: u32,                                           // The number of unique invalid references (error types)
     external_servers: Vec<(String, bool)>,               // List of external servers and if they accepted a connection
     invalid_references: Vec<(String, String, ResponseOutcome)>,  // List of references that have "issues/errors" that had be explicitly dealt with
-    used_selectors: Vec<String>, // TODO: Is this used
+    used: Vec<(String, u16, String)>,                         // Used (server name, server port, selector)
 }
 
 impl Default for Crawler {
@@ -72,7 +71,7 @@ impl Default for Crawler {
             nerr: 0,
             external_servers: Vec::new(),
             invalid_references: Vec::new(),
-            used_selectors: Vec::new(),
+            used: Vec::new(),
         }
     }
 }
@@ -157,7 +156,8 @@ END CRAWLER REPORT",
     pub fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
         let request = Request::new(selector, server_name, server_port);
         
-        self.used_selectors.push(selector.to_string());
+        // TODO: avoid clone
+        self.used.push((server_name.to_string(), server_port, selector.to_string()));
         self.dirs.push((request.server_details.clone(), selector.to_string()));
         self.ndir += 1;
 
@@ -167,15 +167,23 @@ END CRAWLER REPORT",
                 eprintln!("Problem sending OR receving request: {error}");
                 error
         })?;
-        // TODO: Handle invalid response?
-        for response_line in response.to_response_lines() {
-            if let Some(response_line) = response_line {
-                self.process_response_line(response_line).map_err(|error| {
-                    eprintln!("Problem processing response line: {error}");
-                    error
-                })?;
-            } else {()} // Malformed request line (e.g. empty String)
+
+        match response.response_outcome {
+            ResponseOutcome::Complete => {
+                for response_line in response.to_response_lines() {
+                    if let Some(response_line) = response_line {
+                        self.process_response_line(response_line).map_err(|error| {
+                            eprintln!("Problem processing response line: {error}");
+                            error
+                        })?;
+                    } else {()} // Malformed request line (e.g. empty String)
+                }
+            }
+            _ => {
+                self.invalid_references.push((request.server_details.clone(), selector.to_string(), response.response_outcome));
+            }
         }
+        
         Ok(())
     }
 
@@ -183,10 +191,7 @@ END CRAWLER REPORT",
         match response_line.item_type {
             ItemType::TXT => self.handle_supported_file(response_line, ItemType::TXT)?,
             ItemType::DIR => self.handle_dir(response_line)?,
-            ItemType::ERR => {
-                self.nerr += 1;
-                self.ndir -= 1; // Ignore parent directory that led to the error
-            },
+            ItemType::ERR => self.nerr += 1,
             ItemType::BIN => self.handle_supported_file(response_line, ItemType::BIN)?,
             ItemType::DOT | ItemType::UNKNOWN => (), // TODO: Should we do anything else?
         }
@@ -214,24 +219,26 @@ END CRAWLER REPORT",
             // Only need to try connecting
             // Get the current local time
             let local_time = Local::now();
-            let port: u16 = response_line.server_port.parse().unwrap();
-            match TcpStream::connect((response_line.server_name, port)) {
+            // TODO: Use format everywhere
+            match gopher::connect(&format!("{}:{}", response_line.server_name, response_line.server_port)) {
                 Ok(_) => {
                     println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
-                    local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
-                    response_line.server_name, response_line.server_port);
-                    self.external_servers.push((response_line.server_name.to_string(), true))
+                        local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
+                        response_line.server_name, response_line.server_port);
+                    self.external_servers.push((response_line.server_name.to_string(), true));
+                    return Ok(())
                 },
                 Err(_) => {
                     println!("[{:02}h:{:02}m:{:02}s]: FAILED TO CONNECT TO EXTERNAL {} ON {}", 
-                    local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
-                    response_line.server_name, response_line.server_port);
-                    self.external_servers.push((response_line.server_name.to_string(), false))
+                        local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
+                        response_line.server_name, response_line.server_port);
+                    self.external_servers.push((response_line.server_name.to_string(), false));
+                    return Ok(())
                 },
             }
         }
 
-        if self.has_crawled(response_line.selector) { return Ok(()) }
+        if self.has_crawled(response_line.server_name, response_line.server_port.parse().unwrap(), response_line.selector) { return Ok(()) }
         
         self.crawl(response_line.selector, 
             response_line.server_name, 
@@ -241,10 +248,10 @@ END CRAWLER REPORT",
     }
 
     fn handle_supported_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
-        if self.has_crawled(response_line.selector) { return Ok(()) }
-
-        self.used_selectors.push(response_line.selector.to_string());
+        if self.has_crawled(response_line.server_name, response_line.server_port.parse().unwrap(), response_line.selector) { return Ok(()) }
         
+        self.used.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), response_line.selector.to_string()));
+
         let file_type_display = match file_type {
             ItemType::TXT => "TXT",
             ItemType::BIN => "BIN",
@@ -320,7 +327,12 @@ END CRAWLER REPORT",
         Ok(())
     }
 
-    fn has_crawled(&self, selector: &str) -> bool {
-        self.used_selectors.iter().any(|used_selector| used_selector == selector)
+    fn has_crawled(&self, server_details: &str, server_port: u16, selector: &str) -> bool {
+        self.used.iter()
+            .any(|(used_server_details, used_server_port, used_selector)| {
+                used_server_details == server_details && 
+                *used_server_port == server_port &&
+                used_selector == selector
+        })
     }
 }

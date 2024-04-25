@@ -27,32 +27,6 @@ impl Response {
         let buffer = str::from_utf8(&self.buffer).expect("Ivalid UTF-8 sequence"); // TODO: Handle error??
         buffer.split(CRLF).map(|line| ResponseLine::new(line)).collect()
     }
-
-    // TODO: Finish this func. We need to check for \r\n dot \r\n
-    // Call this thing somewhere useful hopefully
-    pub fn clean_buffer(&mut self) {
-        let mut found = false;
-        let mut last_byte = b'\0';
-
-        println!("CLEANING BUFFER!!");
-
-        for (i, &byte) in self.buffer.iter().enumerate().rev() {
-            // Found a dot followed by a carriage return
-            if byte == b'.' && last_byte == b'\r' {
-                found = true;
-            }
-            else if byte == b'\n' {
-                // \n dot \r found
-                if found {
-                    self.buffer.truncate(i);
-                    return;
-                } 
-            } else {
-                found = false;
-            }
-            last_byte = byte;
-        }
-    }
 }
 
 pub enum ItemType {

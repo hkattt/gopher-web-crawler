@@ -3,11 +3,12 @@ pub mod response;
 
 use std::{
     io::{
+        self, 
         ErrorKind, 
         Read, 
         Write
-    },
-    net::TcpStream,
+    }, 
+    net::{TcpStream, ToSocketAddrs}, 
     time::{Duration, Instant}
 };
 
@@ -24,29 +25,62 @@ use self::{
 use crate::{CRLF, MAX_CHUNK_SIZE};
 
 pub fn send_and_recv(request: &Request) -> std::io::Result<Response> {
-    // TODO: Actually handle errors
-    let stream = send(request)?;
-    let response = recv(stream)?;
-    Ok(response)
-}
+    let mut stream = match connect(&request.server_details) {
+        Ok(stream) => stream,
+        Err(error) => match error.kind() {
+            io::ErrorKind::InvalidInput => {
+                eprintln!("Malformed server details: {error}");
+                // TODO: Different outcome for this?
+                return Ok(Response {buffer: Vec::new(), response_outcome: ResponseOutcome::ConnectionFailed})
+            },
+            io::ErrorKind::AddrNotAvailable => {
+                eprintln!("Provided host or port is not available: {error}");
+                return Ok(Response {buffer: Vec::new(), response_outcome: ResponseOutcome::ConnectionFailed})
+            },
+            _ => return Err(error),
+        }
+    };
 
-fn send(request: &Request) -> std::io::Result<TcpStream> {
     // Get the current local time
     let local_time = Local::now();
-
-    // TODO: Use connect_timeout?
-    // TODO: What if connect fails
-    let mut stream = TcpStream::connect(&request.server_details)?;
-
+    
     println!("[{:02}h:{:02}m:{:02}s]: REQUESTING {} FROM {}", 
         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
         request.selector, &request.server_details
     );
 
-    let selector = [request.selector, CRLF].concat();
-    stream.write_all(selector.as_bytes())?;
+    // Send the request to the Gopher server
+    let selector = [request.selector, CRLF].concat(); // TODO: Use format
+    stream.write_all(selector.as_bytes())?; // TODO: Handle error
 
-    Ok(stream)
+    // Receive the request from the Gopher server
+    let response = recv(stream)?; // TODO: Handle error
+    return Ok(response)
+}
+
+pub fn connect(server_details: &str) -> std::io::Result<TcpStream> {
+    // Get the current local time
+    let local_time = Local::now();
+
+    println!("[{:02}h:{:02}m:{:02}s]: CONNECTING TO {}", 
+        local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
+        server_details
+    );
+
+    // TODO: Handle this error?
+    let socket_addrs: Vec<_> = server_details.to_socket_addrs()?.collect();
+
+    for socket_addr in socket_addrs {
+        // TODO: Set global timeout variable
+        match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(5)) {
+            Ok(stream) => return Ok(stream),
+            Err(_) => continue
+        };
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AddrNotAvailable,
+        "Unable to connect to provided hostname and port"
+    ))
 }
 
 fn recv(mut stream: TcpStream) -> std::io::Result<Response> {
