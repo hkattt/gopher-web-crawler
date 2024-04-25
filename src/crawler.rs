@@ -1,8 +1,8 @@
 use std::{
+    cmp::min, 
     fs::File, 
     io::Write, 
-    str,
-    cmp::min, 
+    str 
 };
 
 // Chrono imports for data-time functionality
@@ -91,9 +91,9 @@ impl Crawler {
 \t\t{}\n
 \tNumber of binary files: {}
 \t\t{}\n
-\tContents of the smallest text file: {}\n
-\tSize of the smallest text file: {} bytes
-\t\t{}\n
+\tSmallest text file: {}
+\t\tSize: {} bytes
+\t\tContents: {}\n
 \tSize of the largest text file: {} bytes
 \t\t{}\n
 \tSize of the smallest binary file: {} bytes
@@ -121,9 +121,9 @@ END CRAWLER REPORT",
                 .map(server_selector_display)
                 .collect::<Vec<String>>()
                 .join("\n\t\t"),
-            self.smallest_contents,
-            self.smallest_txt,
             server_selector_display(&self.smallest_txt_selector),
+            self.smallest_txt,
+            self.smallest_contents,
             self.largest_txt,
             server_selector_display(&self.largest_txt_selector),
             self.smallest_bin,
@@ -290,6 +290,8 @@ END CRAWLER REPORT",
                                 if file_size < self.smallest_txt {
                                     self.smallest_txt = file_size;
                                     self.smallest_txt_selector = (request.server_details.clone(), response_line.selector.to_string());
+                                    // TODO: Use the file instead?? might not be worth
+                                    self.smallest_contents = str::from_utf8(&response.buffer).expect("Ivalid UTF-8 sequence").to_string();  // TODO: Handle error??f.bytes().
                                 }
                             },
                             ItemType::BIN => {

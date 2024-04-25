@@ -117,6 +117,7 @@ fn recv(mut stream: &TcpStream, item_type: &ItemType) -> std::io::Result<Respons
         if buffer.len() < 3 {
             Ok(Response::new(buffer, ResponseOutcome::MissingEndLine))
         } else if buffer.iter().rev().take(3).eq(&[b'\n', b'\r', b'.']) {
+            buffer.truncate(buffer.len() - 3);
             Ok(Response::new(buffer, ResponseOutcome::Complete))
         } else {
             Ok(Response::new(buffer, ResponseOutcome::MissingEndLine))

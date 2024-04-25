@@ -24,6 +24,9 @@ const OUTPUT_FOLDER: &str     = "out";
 const MAX_CHUNK_SIZE: usize   = 4096; 
 const MAX_FILENAME_LEN: usize = 255;  // TODO: Can we get this from the OS somehow??
 
+// TODO: What is up with invalid 0
+// TODO: What about malformed1
+
 fn main() -> std::io::Result<()> {
     if let Err(error) = fs::create_dir(Path::new(&OUTPUT_FOLDER)) {
         if error.kind() != ErrorKind::AlreadyExists {
