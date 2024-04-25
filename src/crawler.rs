@@ -6,7 +6,9 @@ use std::{
 };
 
 // Chrono imports for data-time functionality
-use chrono::{Local, Timelike};
+use chrono::Local;
+#[allow(unused_imports)]
+use chrono::Timelike;
 
 use::debug_print::{debug_println, debug_eprintln};
 
@@ -221,6 +223,7 @@ END CRAWLER REPORT",
             // TODO: Handle external servers
             // Only need to try connecting
             // Get the current local time
+            #[allow(unused_variables)]
             let local_time = Local::now();
             // TODO: Use format everywhere
             match gopher::connect(&format!("{}:{}", response_line.server_name, response_line.server_port)) {
@@ -254,7 +257,8 @@ END CRAWLER REPORT",
         if self.has_crawled(response_line.server_name, response_line.server_port.parse().unwrap(), response_line.selector) { return Ok(()) }
         
         self.used.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), response_line.selector.to_string()));
-
+        
+        #[allow(unused_variables)]
         let file_type_display = match file_type {
             ItemType::TXT => "TXT",
             ItemType::BIN => "BIN",

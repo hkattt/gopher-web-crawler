@@ -15,7 +15,9 @@ use std::{
 };
 
 // Chrono imports for data-time functionality
-use chrono::{Local, Timelike};
+use chrono::Local;
+#[allow(unused_imports)]
+use chrono::Timelike;
 
 use self::{
     request::Request, 
@@ -60,6 +62,7 @@ pub fn send_and_recv(request: &Request) -> std::io::Result<Response> {
 
 pub fn connect(server_details: &str) -> std::io::Result<TcpStream> {
     // Get the current local time
+    #[allow(unused_variables)]
     let local_time = Local::now();
 
     debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTING TO {}", 
