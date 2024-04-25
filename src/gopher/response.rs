@@ -66,7 +66,7 @@ pub struct ResponseLine<'a> {
     pub item_type:   ItemType,
     pub selector:    &'a str, 
     pub server_name: &'a str,
-    pub server_port: &'a str,
+    pub server_port: u16,
 }
 
 impl<'a> ResponseLine<'a> {
@@ -77,24 +77,34 @@ impl<'a> ResponseLine<'a> {
         if parts.clone().count() != 4 {return None;}
 
         let user_display_string = parts.next().unwrap();
-        
-        let mut item_type = ItemType::Unknown;
-        match user_display_string.chars().next() {
+
+        let item_type = match user_display_string.chars().next() {
             Some(i) => match i {
-                '0' => item_type = ItemType::Txt,
-                '1' => item_type = ItemType::Dir,
-                '3' => item_type = ItemType::Err,
-                '9' => item_type = ItemType::Bin,
-                _   => ()
+                '0' => ItemType::Txt,
+                '1' => ItemType::Dir,
+                '3' => ItemType::Err,
+                '9' => ItemType::Bin,
+                _   => ItemType::Unknown
             },
             None => return None
         };
+        // Any selector is fine
+        let selector = parts.next().unwrap();
+        // TODO: Server name cannot be empty
+        let server_name = parts.next().unwrap();
+        // TODO: Server port must be an integer
+        let server_port = parts.next().unwrap().parse::<u16>();
+        let server_port = match server_port {
+            Ok(port) => port,
+            Err(_) => return None, 
+        };
+
         Some(
             ResponseLine {
                 item_type,
-                selector:    parts.next().unwrap(),
-                server_name: parts.next().unwrap(),
-                server_port: parts.next().unwrap(),
+                selector,
+                server_name,
+                server_port,
             }
         )
     }

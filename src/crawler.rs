@@ -196,7 +196,7 @@ impl Crawler {
     fn handle_dir(&mut self, response_line: ResponseLine) -> std::io::Result<()> {
         // External server
         // External server is anything with a different server name OR a different port 
-        if response_line.server_name != self.root_server_name() || response_line.server_port != self.root_server_port().to_string() {
+        if response_line.server_name != self.root_server_name() || response_line.server_port != self.root_server_port() {
             // Get the current local time
             #[allow(unused_variables)]
             let local_time = Local::now();
@@ -206,7 +206,7 @@ impl Crawler {
                     debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
-                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), true));
+                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port, true));
                     return Ok(())
                 },
                 Err(_) => {
@@ -214,30 +214,30 @@ impl Crawler {
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
                     // TODO: Should we just pass string server_port?
-                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), false));
+                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port, false));
                     return Ok(())
                 },
             }
         }
 
-        if self.has_crawled(response_line.server_name, response_line.server_port.parse().unwrap(), response_line.selector) { return Ok(()) }
+        if self.has_crawled(response_line.server_name, response_line.server_port, response_line.selector) { return Ok(()) }
         
         self.crawl(response_line.selector, 
             response_line.server_name, 
-            response_line.server_port.parse().unwrap()
+            response_line.server_port
         )?;
         Ok(())
     }
 
     fn handle_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
-        if self.has_crawled(response_line.server_name, response_line.server_port.parse().unwrap(), response_line.selector) { return Ok(()) }
+        if self.has_crawled(response_line.server_name, response_line.server_port, response_line.selector) { return Ok(()) }
         
-        self.used.push((response_line.server_name.to_string(), response_line.server_port.parse().unwrap(), response_line.selector.to_string()));
+        self.used.push((response_line.server_name.to_string(), response_line.server_port, response_line.selector.to_string()));
         
         let request = Request::new(
             response_line.selector, 
             response_line.server_name, 
-            response_line.server_port.parse().unwrap(),
+            response_line.server_port,
             file_type,
         );
 
