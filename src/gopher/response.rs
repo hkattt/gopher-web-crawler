@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{CRLF, DOT, TAB};
+use crate::{CRLF, TAB};
 
 pub enum ResponseOutcome {
     Complete,
@@ -8,6 +8,18 @@ pub enum ResponseOutcome {
     FileTooLong,
     ConnectionFailed,
     MissingEndLine,
+}
+
+impl ToString for ResponseOutcome {
+    fn to_string(&self) -> String {
+        match self {
+            ResponseOutcome::Complete => String::from("Completed sucessfully"),
+            ResponseOutcome::Timeout  => String::from("Connection timed out"),
+            ResponseOutcome::FileTooLong => String::from("File too long"),
+            ResponseOutcome::ConnectionFailed => String::from("Failed to connect"),
+            ResponseOutcome::MissingEndLine => String::from("Missing end-line"),
+        }
+    }
 }
 
 pub struct Response {
@@ -36,7 +48,6 @@ pub enum ItemType {
     DIR,     // 1   Item is a directory 
     ERR,     // 3   Item is a error
     BIN,     // 9   Item is a binary file
-    DOT,     // .   Item is a . line
     UNKNOWN, // _   Item is unknown     
 }
 
@@ -49,16 +60,6 @@ pub struct ResponseLine<'a> {
 
 impl<'a> ResponseLine<'a> {
     pub fn new(line: &'a str) -> Option<ResponseLine<'a>> {
-        // Line is a single dot
-        if line.eq(DOT) {
-            return Some(
-                ResponseLine {
-                    item_type: ItemType::DOT, 
-                    selector: "", server_name: "", server_port: ""
-                }
-            );
-        }
-
         let mut parts = line.splitn(4, TAB);
 
         // TODO: Can we do this without cloning?

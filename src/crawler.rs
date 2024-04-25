@@ -86,7 +86,8 @@ impl Crawler {
     }
 
     pub fn report(&self) {
-        let server_selector_display = |(server_details, selector): &(String, String)| [server_details, ": ", selector].concat();
+        let server_selector_display = 
+            |(server_details, selector): &(String, String)| format!("{server_details}: {selector}");
         println!(
 "\nSTART CRAWLER REPORT\n
 \tNumber of Gopher directories: {}
@@ -138,20 +139,13 @@ END CRAWLER REPORT",
             self.external_servers.iter()
                 .map(|(external_server, conn_result)| {
                     let conn_result = if *conn_result {"connected successfully"} else {"did not connect"};
-                    [external_server, ": ", conn_result].concat()
+                    format!("{external_server}: {conn_result}")
                 })
                 .collect::<Vec<String>>()
                 .join("\n\t\t"),
             self.invalid_references.iter()
                 .map(|(server_details, invalid_reference, response_outcome)| {
-                    let response_outcome = match *response_outcome {
-                        ResponseOutcome::ConnectionFailed => "connection failed",
-                        ResponseOutcome::FileTooLong => "file too long",
-                        ResponseOutcome::Timeout => "response timed out",
-                        ResponseOutcome::MissingEndLine => "missing end-line character",
-                        _ => ""
-                    };
-                    [server_details, ": ", invalid_reference, " ", response_outcome].concat()
+                    format!("{} {}: {}", response_outcome.to_string(), server_details, invalid_reference)
                 })
                 .collect::<Vec<String>>()
                 .join("\n\t\t"),
@@ -198,7 +192,7 @@ END CRAWLER REPORT",
             ItemType::DIR => self.handle_dir(response_line)?,
             ItemType::ERR => self.nerr += 1,
             ItemType::BIN => self.handle_supported_file(response_line, ItemType::BIN)?,
-            ItemType::DOT | ItemType::UNKNOWN => (), // TODO: Should we do anything else?
+            ItemType::UNKNOWN => (), // TODO: Should we do anything else?
         }
         Ok(())
     }
@@ -209,7 +203,7 @@ END CRAWLER REPORT",
         // Replace forward slashes with dashes to create a valid file name
         let file_name = file_name.replace("/", "-");
         // TODO: Replace the string stuff with global variables?
-        let file_path = [OUTPUT_FOLDER, "/", &file_name].concat();
+        let file_path = format!("{}/{}", OUTPUT_FOLDER, &file_name);
         let mut f = File::create(file_path).map_err(|error| {
             debug_eprintln!("Unable to create new file: {error}");
             error

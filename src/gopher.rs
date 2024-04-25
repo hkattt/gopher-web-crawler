@@ -52,7 +52,7 @@ pub fn send_and_recv(request: &Request) -> std::io::Result<Response> {
     );
 
     // Send the request to the Gopher server
-    let selector = [request.selector, CRLF].concat(); // TODO: Use format
+    let selector = format!("{}{}", request.selector, CRLF);
     stream.write_all(selector.as_bytes())?; // TODO: Handle error
 
     // Receive the request from the Gopher server
