@@ -44,14 +44,13 @@ pub struct Crawler {
     
     nerr: u32,                                           // The number of unique invalid references (error types)
     external_servers: Vec<(String, u16, bool)>,               // TODO: Fix List of external servers and if they accepted a connection
-    invalid_references: Vec<(String, String, ResponseOutcome)>,  // List of references that have "issues/errors" that had be explicitly dealt with
+    invalid_references: Vec<(String, ResponseOutcome)>,  // List of references that have "issues/errors" that had be explicitly dealt with
     used: Vec<(String, u16, String)>,                         // Used (server name, server port, selector)
 }
 
 impl Default for Crawler {
     fn default() -> Crawler {
         Crawler {
-
             ndir: 0,   
             dirs: Vec::new(),
             
@@ -100,8 +99,8 @@ impl Crawler {
             format!("{}:{} {}", server_name, *server_port, status)
         };
     
-        let format_invalid_reference = |(server_details, invalid_reference, response_outcome): &(String, String, ResponseOutcome)| {
-            format!("{} {}: {}", response_outcome.to_string(), server_details, invalid_reference)
+        let format_invalid_reference = |(response_details, response_outcome): &(String, ResponseOutcome)| {
+            format!("{} {}", response_outcome.to_string(), response_details)
         };
 
         println!(
@@ -176,17 +175,22 @@ impl Crawler {
                                 ResponseLineError::Empty => (),
                                 // TODO: Fix this man
                                 ResponseLineError::InvalidParts(line) => {
-                                    self.invalid_references.push((line, String::from(""), ResponseOutcome::MalformedResponseLine));
-                                    // TODO: What are we doing with these?
+                                    self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
                                 },
                                 ResponseLineError::EmptyDisplayString(line) => {
-                                    self.invalid_references.push((line, String::from(""), ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
                                 },
                                 ResponseLineError::EmptyHost(server_name, server_port, selector) => {
-                                    self.invalid_references.push((format!("{}:{}", server_name, server_port), selector, ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((
+                                        format!("{}:{} {}", server_name, server_port, selector),
+                                        ResponseOutcome::MalformedResponseLine
+                                    ));
                                 }, 
                                 ResponseLineError::NonIntPort(server_name, server_port, selector) => {
-                                    self.invalid_references.push((format!("{}:{}", server_name, server_port), selector, ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((
+                                        format!("{}:{} {}", server_name, server_port, selector), 
+                                        ResponseOutcome::MalformedResponseLine
+                                    ));
                                 },
                             }
                         }
@@ -196,7 +200,10 @@ impl Crawler {
                 self.ndir += 1;
             }
             _ => {
-                self.invalid_references.push((request.server_details.clone(), selector.to_string(), response.response_outcome));
+                self.invalid_references.push((
+                    format!("{} {}", request.server_details.clone(), selector.to_string()),
+                    response.response_outcome
+                ));
             }
         }
         Ok(())
@@ -281,7 +288,10 @@ impl Crawler {
                 }
             }
             _ => {
-                self.invalid_references.push((request.server_details.clone(), response_line.selector.to_string(), response.response_outcome));
+                self.invalid_references.push((
+                    format!("{} {}", request.server_details.clone(), request.selector.to_string()),
+                    response.response_outcome
+                ));
             }
         }
         Ok(())
