@@ -2,7 +2,7 @@ mod crawler;
 mod gopher;
 
 use std::{
-    fs, 
+    fs::{self, remove_dir_all}, 
     io::ErrorKind, 
     path::Path
 };
@@ -26,8 +26,11 @@ const MAX_FILENAME_LEN: usize = 255;  // TODO: Can we get this from the OS someh
 
 // TODO: What is up with invalid 0
 // TODO: What about malformed1
+// TODO: Debug mode
+// TODO: Command line arguments: debug, server, remove directory
 
 fn main() -> std::io::Result<()> {
+    // Create output directory to store files
     if let Err(error) = fs::create_dir(Path::new(&OUTPUT_FOLDER)) {
         if error.kind() != ErrorKind::AlreadyExists {
             panic!("Unable to create output folder: {error}");
@@ -38,5 +41,9 @@ fn main() -> std::io::Result<()> {
     // TODO: Create this with builder?
     crawler.crawl(STARTING_SELECTOR, SERVER_NAME, SERVER_PORT)?;
     crawler.report();
+
+    // Remove output directory and all of its contents
+    remove_dir_all(OUTPUT_FOLDER)?;
+
     Ok(())
 }
