@@ -11,8 +11,9 @@ The project also uses the following crates:
 
 All networking functionality was done using standard library imports.
 
+The Gopher crawler has been successfully tested on Linux and Windows.
+
 ## Usage
-Note that this project was developed and tested in a **Ubuntu Linux** environment. 
 
 The usage for the program is:
 ```
@@ -36,17 +37,20 @@ cargo run --release -- [-n <server_name>] [-p <server_port>] [-d]
 This will only print request information and the final crawl report. 
 
 ## Project Structure
-`src`: contains all the program files.
-* `main.rs`
-* `crawler.rs`
-* `gopher.rs`
-* `gopher`
-    * `request.rs`
-    * `response.rs`
-
-`Cargo.toml` and `Cargo.lock`: contains information regarding project dependencies.
-
-`imgs`: contains images used in this `README.md`.
+```
+├── Cargo.lock
+├── Cargo.toml
+├── imgs
+│   └── wireshark-convo.png
+├── README.md
+└── src
+    ├── crawler.rs
+    ├── gopher
+    │   ├── request.rs
+    │   └── response.rs
+    ├── gopher.rs
+    └── main.rs
+```
 
 ## External Servers
 An external server is any referenced server that is on a different host or port to the default server. `comp3310.ddns.net:70` references two external servers. Further details can be found in the crawler report. 
