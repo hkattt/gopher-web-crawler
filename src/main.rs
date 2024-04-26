@@ -15,9 +15,6 @@ use crawler::Crawler;
 
 const CRLF: &str              = "\r\n";
 const TAB: &str               = "\t";
-const STARTING_SELECTOR: &str = "";
-const SERVER_NAME: &str       = "comp3310.ddns.net";
-const SERVER_PORT: u16        = 70;
 const OUTPUT_FOLDER: &str     = "out";
 const MAX_CHUNK_SIZE: usize   = 4096; 
 const MAX_FILENAME_LEN: usize = 255;  
@@ -28,9 +25,10 @@ const MAX_FILENAME_LEN: usize = 255;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Assign default program parameters
-    let mut server_name = SERVER_NAME.to_string();
-    let mut server_port = SERVER_PORT;
+    let mut server_name = String::from("comp3310.ddns.net");
+    let mut server_port = 70;
     let mut remove_dirs = true;
+    let starting_selector = String::from("");
 
     let mut args_iter = env::args().skip(1);
     while let Some(arg) = args_iter.next() {
@@ -70,8 +68,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // TODO: Should we make SERVER_PORT a &str?
-    let mut crawler = Crawler::new(&server_name, server_port);
-    crawler.start_crawl()?;
+    let mut crawler = Crawler::new(server_name, server_port);
+    crawler.start_crawl(starting_selector)?;
     crawler.report();
 
     // Remove output directory and all of its contents

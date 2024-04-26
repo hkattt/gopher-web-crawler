@@ -2,7 +2,8 @@ use std::{
     cmp::min, 
     fs::{File, Metadata}, 
     io::Write, 
-    str
+    str,
+    rc::Rc
 };
 
 // Chrono imports for data-time functionality
@@ -12,27 +13,27 @@ use chrono::Timelike;
 
 use::debug_print::{debug_println, debug_eprintln};
 
-use crate::{gopher::{
+use crate::gopher::{
     self, 
     request::Request, 
     response::{ItemType, ResponseLine, ResponseLineError, ResponseOutcome}
-}, SERVER_NAME, SERVER_PORT, STARTING_SELECTOR};
+};
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
 
 // TODO: Can we use references instread?
-pub struct Crawler<'a> {
-    root_server_name: &'a str,
+pub struct Crawler {
+    root_server_name: Rc<String>,
     root_server_port: u16,
 
     ndir: u32,                                           // The number of directories
-    dirs: Vec<(String, String)>,                         // List of all directories (server details, directory)
+    dirs: Vec<(Rc<String>, Rc<String>)>,                         // List of all directories (server details, directory)
 
     ntxt:  u32,                                          // The number of simple text files
-    txt_files: Vec<(String, String)>,                    // List of all simple text tiles (full path) (server details, text file)
+    txt_files: Vec<(Rc<String>, Rc<String>)>,                    // List of all simple text tiles (full path) (server details, text file)
     
     nbin:  u32,                                          // The number of binary (i.e. non-text) files
-    bin_files: Vec<(String, String)>,                    // List of all binary files (full path) (server details, binary file)
+    bin_files: Vec<(Rc<String>, Rc<String>)>,                    // List of all binary files (full path) (server details, binary file)
     
     smallest_contents: String,                           // Contents of the smallest text file
     smallest_txt: u64,                                   // The size of the smallest text file
@@ -41,22 +42,22 @@ pub struct Crawler<'a> {
     smallest_bin: u64,                                   // The size of the smallest binary file
     largest_bin: u64,                                    // The size of the largest binary file
     
-    smallest_txt_selector: (String, String),             // The selector of the smallest text file
-    largest_txt_selector: (String, String),              // The selector of the largest text file
-    smallest_bin_selector: (String, String),             // The selector of the smallest binary file
-    largest_bin_selector: (String, String),              // The selector of the largest binary file
+    smallest_txt_selector: (Rc<String>, Rc<String>),             // The selector of the smallest text file
+    largest_txt_selector:  (Rc<String>, Rc<String>),              // The selector of the largest text file
+    smallest_bin_selector: (Rc<String>, Rc<String>),             // The selector of the smallest binary file
+    largest_bin_selector:  (Rc<String>, Rc<String>),              // The selector of the largest binary file
     
     nerr: u32,                                           // The number of unique invalid references (error types)
-    external_servers: Vec<(String, u16, bool)>,               // TODO: Fix List of external servers and if they accepted a connection
+    external_servers: Vec<(Rc<String>, u16, bool)>,               // TODO: Fix List of external servers and if they accepted a connection
     invalid_references: Vec<(String, ResponseOutcome)>,  // List of references that have "issues/errors" that had be explicitly dealt with
-    used: Vec<(String, u16, String)>,                         // Used (server name, server port, selector)
+    used: Vec<(Rc<String>, u16, Rc<String>)>,                         // Used (server name, server port, selector)
 }
 
-impl<'a> Default for Crawler<'a> {
-    fn default() -> Crawler<'a> {
+impl Default for Crawler {
+    fn default() -> Crawler{
         Crawler {
-            root_server_name: SERVER_NAME,
-            root_server_port: SERVER_PORT,
+            root_server_name: Rc::new(String::from("comp3310.ddns.net")),
+            root_server_port: 70,
 
             ndir: 0,   
             dirs: Vec::new(),
@@ -74,10 +75,10 @@ impl<'a> Default for Crawler<'a> {
             smallest_bin: u64::MAX, 
             largest_bin: 0,
             
-            smallest_txt_selector: (String::new(), String::new()),
-            largest_txt_selector: (String::new(), String::new()),
-            smallest_bin_selector: (String::new(), String::new()),
-            largest_bin_selector: (String::new(), String::new()),
+            smallest_txt_selector: (Rc::new(String::new()), Rc::new(String::new())),
+            largest_txt_selector:  (Rc::new(String::new()), Rc::new(String::new())),
+            smallest_bin_selector: (Rc::new(String::new()), Rc::new(String::new())),
+            largest_bin_selector:  (Rc::new(String::new()), Rc::new(String::new())),
             
             nerr: 0,
             external_servers: Vec::new(),
@@ -87,23 +88,23 @@ impl<'a> Default for Crawler<'a> {
     }
 }
 
-impl<'a> Crawler<'a> {
-    pub fn new(server_name: &'a str, server_port: u16) -> Crawler {
-        Crawler { root_server_name: server_name, root_server_port: server_port, ..Default::default() }
+impl Crawler {
+    pub fn new(server_name: String, server_port: u16) -> Crawler {
+        Crawler { root_server_name: server_name.into(), root_server_port: server_port, ..Default::default() }
     }
 
     pub fn report(&self) {
-        let format_server_selector = |(server_details, selector): &(String, String)| {
-            format!("{server_details}: {selector}")
+        let format_server_selector = |(server_details, selector): &(Rc<String>, Rc<String>)| {
+            format!("{}: {}", *server_details, *selector)
         };
     
-        let format_external_server = |(server_name, server_port, conn_result): &(String, u16, bool)| {
+        let format_external_server = |(server_name, server_port, conn_result): &(Rc<String>, u16, bool)| {
             let status = if *conn_result {
                 "connected successfully"
             } else {
                 "did not connect"
             };
-            format!("{}:{} {}", server_name, *server_port, status)
+            format!("{}:{} {}", *server_name, *server_port, status)
         };
     
         let format_invalid_reference = |(response_details, response_outcome): &(String, ResponseOutcome)| {
@@ -177,20 +178,35 @@ impl<'a> Crawler<'a> {
         );
     }
 
-    pub fn start_crawl(&mut self) -> std::io::Result<()> {
+    pub fn start_crawl(&mut self, starting_selector: String) -> std::io::Result<()> {
         // TODO: Can we specify a starting selector?
         // TODO: Can we fix this without cloning?
-        self.crawl(STARTING_SELECTOR, &self.root_server_name, self.root_server_port)?;
+        // self.crawl(STARTING_SELECTOR, self.root_server_name, self.root_server_port)?;
+        // TODO: How use root server name!!
+        // TODO: Do these need to be Rcs?
+        self.crawl(
+            Rc::new(starting_selector), 
+            Rc::clone(&self.root_server_name), 
+            self.root_server_port
+        )?;
 
         Ok(())
     }
 
-    fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
-        let request = Request::new(selector, server_name, server_port, ItemType::Dir);
-        
-        // TODO: avoid clone
-        self.used.push((server_name.to_string(), server_port, selector.to_string()));
+    fn crawl(&mut self, selector: Rc<String>, server_name: Rc<String>, server_port: u16) -> std::io::Result<()> {
+        self.used.push((
+            Rc::clone(&server_name), 
+            server_port, 
+            Rc::clone(&selector)
+        ));
 
+        let request = Request::new(
+            Rc::clone(&selector), 
+            Rc::clone(&server_name), 
+            server_port, 
+            ItemType::Dir
+        );
+        
         // TODO: Actually handle errors
         let response = gopher::send_and_recv(&request)
             .map_err(|error| {
@@ -212,10 +228,10 @@ impl<'a> Crawler<'a> {
                             match error {
                                 ResponseLineError::Empty => (),
                                 ResponseLineError::InvalidParts(line) => {
-                                    self.invalid_references.push((line.to_string(), ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
                                 },
                                 ResponseLineError::EmptyDisplayString(line) => {
-                                    self.invalid_references.push((line.to_string(), ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
                                 },
                                 ResponseLineError::EmptyHost(server_name, server_port, selector) => {
                                     self.invalid_references.push((
@@ -233,12 +249,12 @@ impl<'a> Crawler<'a> {
                         }
                     }
                 }
-                self.dirs.push((request.server_details.clone(), selector.to_string()));
+                self.dirs.push((request.server_details, selector));
                 self.ndir += 1;
             }
             _ => {
                 self.invalid_references.push((
-                    format!("{} {}", request.server_details.clone(), selector.to_string()),
+                    format!("{} {}", request.server_details, selector),
                     response.response_outcome
                 ));
             }
@@ -270,7 +286,7 @@ impl<'a> Crawler<'a> {
                     debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
-                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port, true));
+                    self.external_servers.push((response_line.server_name, response_line.server_port, true));
                     return Ok(())
                 },
                 Err(_) => {
@@ -278,14 +294,15 @@ impl<'a> Crawler<'a> {
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
                     // TODO: Should we just pass string server_port?
-                    self.external_servers.push((response_line.server_name.to_string(), response_line.server_port, false));
+                    self.external_servers.push((response_line.server_name, response_line.server_port, false));
                     return Ok(())
                 },
             }
         }
 
-        if self.has_crawled(response_line.server_name, response_line.server_port, response_line.selector) { return Ok(()) }
+        if self.has_crawled(&response_line.server_name, response_line.server_port, &response_line.selector) { return Ok(()) }
         
+        // TODO: Is it good to use reference here?
         self.crawl(response_line.selector, 
             response_line.server_name, 
             response_line.server_port
@@ -294,9 +311,14 @@ impl<'a> Crawler<'a> {
     }
 
     fn handle_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
-        if self.has_crawled(response_line.server_name, response_line.server_port, response_line.selector) { return Ok(()) }
+        // TODO: Is there better syntax?
+        if self.has_crawled(&*response_line.server_name, response_line.server_port, &*response_line.selector) { return Ok(()) }
         
-        self.used.push((response_line.server_name.to_string(), response_line.server_port, response_line.selector.to_string()));
+        self.used.push((
+            Rc::clone(&response_line.server_name), 
+            response_line.server_port,
+            Rc::clone(&response_line.selector))
+        );
         
         let request = Request::new(
             response_line.selector, 
@@ -312,7 +334,7 @@ impl<'a> Crawler<'a> {
 
         match response.response_outcome {
             ResponseOutcome::Complete => {
-                let f = Crawler::download_file(response_line.selector, &response.buffer).map_err(|error| {
+                let f = Crawler::download_file(&request.selector, &response.buffer).map_err(|error| {
                     debug_eprintln!("Error downloading {} file: {}", request.item_type.to_string(), error);
                     error
                 })?;
@@ -339,33 +361,51 @@ impl<'a> Crawler<'a> {
         match request.item_type {
             ItemType::Txt => {
                 self.ntxt += 1;
-                self.txt_files.push((request.server_details.clone(), request.selector.to_string())); // TODO: Can we use references instead?
+                self.txt_files.push((
+                    Rc::clone(&request.server_details), 
+                    Rc::clone(&request.selector))
+                ); // TODO: Can we use references instead?
 
                 if file_size > self.largest_txt {
                     self.largest_txt = file_size;
                     // TODO: Can we use references instead?
-                    self.largest_txt_selector = (request.server_details.clone(), request.selector.to_string());
+                    self.largest_txt_selector = (
+                        Rc::clone(&request.server_details), 
+                        Rc::clone(&request.selector)
+                    );
                 }
 
                 if file_size < self.smallest_txt {
                     self.smallest_txt = file_size;
-                    self.smallest_txt_selector = (request.server_details.clone(), request.selector.to_string());
+                    self.smallest_txt_selector = (
+                        Rc::clone(&request.server_details), 
+                        Rc::clone(&request.selector)
+                    );
                     // TODO: Use the file instead?? might not be worth
                     self.smallest_contents = str::from_utf8(buffer).expect("Ivalid UTF-8 sequence").to_string();  // TODO: Handle error??f.bytes().
                 }
             },
             ItemType::Bin => {
                 self.nbin += 1;
-                self.bin_files.push((request.server_details.clone(), request.selector.to_string())); // TODO: Can we use references instead of clone and to_string?
+                self.bin_files.push((
+                    Rc::clone(&request.server_details), 
+                    Rc::clone(&request.selector)
+                )); // TODO: Can we use references instead of clone and to_string?
 
                 if file_size > self.largest_bin {
                     self.largest_bin = file_size;
-                    self.largest_bin_selector = (request.server_details.clone(), request.selector.to_string());
+                    self.largest_bin_selector = (
+                        Rc::clone(&request.server_details), 
+                        Rc::clone(&request.selector)
+                    );
                 }
 
                 if file_size < self.smallest_bin {
                     self.smallest_bin = file_size;
-                    self.smallest_bin_selector = (request.server_details.clone(), request.selector.to_string());
+                    self.smallest_bin_selector = (
+                        Rc::clone(&request.server_details), 
+                        Rc::clone(&request.selector)
+                    );
                 }
             },
             _ => (),
@@ -375,9 +415,9 @@ impl<'a> Crawler<'a> {
     fn has_crawled(&self, server_details: &str, server_port: u16, selector: &str) -> bool {
         self.used.iter()
             .any(|(used_server_details, used_server_port, used_selector)| {
-                used_server_details == server_details && 
+                **used_server_details == server_details && 
                 *used_server_port == server_port &&
-                used_selector == selector
+                **used_selector == selector
         })
     }
 

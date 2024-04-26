@@ -1,4 +1,7 @@
-use std::str;
+use std::{
+    str,
+    rc::Rc
+};
 
 use crate::{CRLF, TAB};
 
@@ -37,10 +40,10 @@ impl Response {
         }
     }
 
-    pub fn to_response_lines<'a>(&'a self) -> Vec<Result<ResponseLine<'a>, ResponseLineError>> {
+    pub fn to_response_lines<'a>(&'a self) -> Vec<Result<ResponseLine, ResponseLineError>> {
         // Convert byte stream into a string (i.e. UTF-8 sequence)
         let buffer = str::from_utf8(&self.buffer).expect("Ivalid UTF-8 sequence"); // TODO: Handle error??
-        buffer.split(CRLF).map(|line| ResponseLine::new(line)).collect()
+        buffer.split(CRLF).map(|line| ResponseLine::new(line.to_string())).collect()
     }
 }
 
@@ -65,15 +68,16 @@ impl ToString for ItemType {
 }
 
 #[derive(Debug)]
-pub enum ResponseLineError<'a> {
+pub enum ResponseLineError {
+    // TODO: Would these be better as strings?
     Empty,
-    InvalidParts(&'a str),
-    EmptyDisplayString(&'a str),
-    EmptyHost(&'a str, String, &'a str), 
-    NonIntPort(&'a str, &'a str, &'a str)
+    InvalidParts(String),
+    EmptyDisplayString(String),
+    EmptyHost(String, String, String), 
+    NonIntPort(String, String, String)
 }
 
-impl<'a> std::fmt::Display for ResponseLineError<'a> {
+impl std::fmt::Display for ResponseLineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ResponseLineError::Empty => write!(f, "Empty response line"),
@@ -85,29 +89,32 @@ impl<'a> std::fmt::Display for ResponseLineError<'a> {
     }
 }
 
-impl<'a> std::error::Error for ResponseLineError<'a> {}
+impl<'a> std::error::Error for ResponseLineError {}
 
-pub struct ResponseLine<'a> {
+pub struct ResponseLine{
     pub item_type:   ItemType,
-    pub selector:    &'a str, 
-    pub server_name: &'a str,
+    pub selector:    Rc<String>, 
+    pub server_name: Rc<String>,
     pub server_port: u16,
 }
 
-impl<'a> ResponseLine<'a> {
-    pub fn new(line: &'a str) -> Result<ResponseLine<'a>, ResponseLineError> {
+impl<'a> ResponseLine {
+    pub fn new(line: String) -> Result<ResponseLine, ResponseLineError> {
         if line.is_empty() {
             return Err(ResponseLineError::Empty);
         }
 
-        let mut parts = line.splitn(4, TAB);
+        let mut parts = line.splitn(4, TAB).map(String::from).collect::<Vec<_>>();
 
         // TODO: Can we do this without cloning?
-        if parts.clone().count() != 4 {
+        if parts.len() != 4 {
             return Err(ResponseLineError::InvalidParts(line));
         }
 
-        let user_display_string = parts.next().unwrap();
+        let user_display_string = parts.remove(0);
+        let selector = parts.remove(0);
+        let server_name = parts.remove(0);
+        let server_port_str = parts.remove(0);
 
         let item_type = match user_display_string.chars().next() {
             Some(i) => match i {
@@ -119,25 +126,22 @@ impl<'a> ResponseLine<'a> {
             },
             None => return Err(ResponseLineError::EmptyDisplayString(line))
         };
-        // Any selector is fine
-        let selector = parts.next().unwrap();
-        // TODO: Server name cannot be empty
-        let server_name = parts.next().unwrap();
+        // Server name cannot be empty        
         if server_name.is_empty() {
-            return Err(ResponseLineError::EmptyHost(server_name, parts.next().unwrap().to_string(), selector))
+            return Err(ResponseLineError::EmptyHost(server_name, server_port_str, selector))
         }
-        // TODO: Server port must be an integer
-        let server_port_str = parts.next().unwrap();
+        // Server port must be an integer        
         let server_port = server_port_str.parse::<u16>();
         let server_port = match server_port {
             Ok(port) => port,
             Err(_) => return Err(ResponseLineError::NonIntPort(server_name, server_port_str, selector)), 
         };
+
         Ok(
             ResponseLine {
                 item_type,
-                selector,
-                server_name,
+                selector: Rc::new(selector),
+                server_name: Rc::new(server_name),
                 server_port,
             }
         )
