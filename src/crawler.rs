@@ -103,6 +103,29 @@ impl Crawler {
             format!("{} {}", response_outcome.to_string(), response_details)
         };
 
+        let sort_alphabetically = |mut v: Vec<String>| {
+            v.sort_by(|a, b| {
+                a.to_lowercase().cmp(&b.to_lowercase())
+            });
+            v
+        };
+
+        let sorted_dirs = sort_alphabetically(
+            self.dirs.iter().map(format_server_selector).collect::<Vec<String>>()
+        );
+        let sorted_txt_files = sort_alphabetically(
+            self.txt_files.iter().map(format_server_selector).collect::<Vec<String>>()
+        );
+        let sorted_bin_files = sort_alphabetically(
+            self.bin_files.iter().map(format_server_selector).collect::<Vec<String>>()
+        );
+        let sorted_external_servers = sort_alphabetically(
+            self.external_servers.iter().map(format_external_server).collect::<Vec<_>>()
+        );
+        let sorted_invalid_references = sort_alphabetically(
+            self.invalid_references.iter().map(format_invalid_reference).collect::<Vec<_>>()
+        );
+
         println!(
             "\nSTART CRAWLER REPORT\n\n\
             \tNumber of Gopher directories: {}\n\
@@ -127,11 +150,11 @@ impl Crawler {
             \t\t{}\n\n\
             END CRAWLER REPORT",
             self.ndir,
-            self.dirs.iter().map(format_server_selector).collect::<Vec<_>>().join("\n\t\t"),
+            sorted_dirs.join("\n\t\t"),
             self.ntxt,
-            self.txt_files.iter().map(format_server_selector).collect::<Vec<_>>().join("\n\t\t"),
+            sorted_txt_files.join("\n\t\t"),
             self.nbin,
-            self.bin_files.iter().map(format_server_selector).collect::<Vec<_>>().join("\n\t\t"),
+            sorted_bin_files.join("\n\t\t"),
             format_server_selector(&self.smallest_txt_selector),
             self.smallest_txt,
             self.smallest_contents,
@@ -142,8 +165,8 @@ impl Crawler {
             self.largest_bin,
             format_server_selector(&self.largest_bin_selector),
             self.nerr,
-            self.external_servers.iter().map(format_external_server).collect::<Vec<_>>().join("\n\t\t"),
-            self.invalid_references.iter().map(format_invalid_reference).collect::<Vec<_>>().join("\n\t\t"),
+            sorted_external_servers.join("\n\t\t"),
+            sorted_invalid_references.join("\n\t\t"),
         );
     }
 
@@ -173,7 +196,6 @@ impl Crawler {
                         Err(error) => {
                             match error {
                                 ResponseLineError::Empty => (),
-                                // TODO: Fix this man
                                 ResponseLineError::InvalidParts(line) => {
                                     self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
                                 },
