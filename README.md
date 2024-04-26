@@ -55,8 +55,13 @@ As RFC 1436, text file and directory item types should be terminated with the la
 The crawler identified 5 problematic internal references which had to be dealt with explicitly. The full details can be found in the crawler report.
 
 ## Wireshark Initial Response
+The below image shows the initial Gopher request sent from the crawler to the Gopher server. As shown in the image, the port number is 70.
 
+![image](imgs/initial-gopher.png)
 
+The below image shows the final Gopher response sent from the Gopher server to the crawler. As shown in the image, the response is terminated with the last line `'.'CR-LF`. The image also shows some of the home-page infomation sent from the Gopher server.
+
+![image](imgs/final-gopher.png)
 
 ## Crawler Report 
 This final crawler report for `comp3310.ddns.net:70` is shown below. 
