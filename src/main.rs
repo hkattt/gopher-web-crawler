@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             // Invalid argument
             _ => {
-                eprintln!("Usage: gopher [-n server name] [-p server port] [-d]");
+                eprintln!("Usage: gopher [-n <server_name>] [-p <server_port>] [-d]");
                 return Ok(())
             }
         }
