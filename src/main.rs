@@ -70,9 +70,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // TODO: Should we make SERVER_PORT a &str?
-    let mut crawler = Crawler::new();
-    // TODO: Create this with builder?
-    crawler.crawl(STARTING_SELECTOR, &server_name, server_port)?;
+    let mut crawler = Crawler::new(&server_name, server_port);
+    crawler.start_crawl()?;
     crawler.report();
 
     // Remove output directory and all of its contents

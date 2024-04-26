@@ -12,15 +12,19 @@ use chrono::Timelike;
 
 use::debug_print::{debug_println, debug_eprintln};
 
-use crate::gopher::{
+use crate::{gopher::{
     self, 
     request::Request, 
-    response::{ItemType, ResponseLine, ResponseOutcome, ResponseLineError}
-};
+    response::{ItemType, ResponseLine, ResponseLineError, ResponseOutcome}
+}, SERVER_NAME, SERVER_PORT, STARTING_SELECTOR};
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
 
+// TODO: Can we use references instread?
 pub struct Crawler {
+    root_server_name: String,
+    root_server_port: u16,
+
     ndir: u32,                                           // The number of directories
     dirs: Vec<(String, String)>,                         // List of all directories (server details, directory)
 
@@ -51,6 +55,9 @@ pub struct Crawler {
 impl Default for Crawler {
     fn default() -> Crawler {
         Crawler {
+            root_server_name: SERVER_NAME.to_string(),
+            root_server_port: SERVER_PORT,
+
             ndir: 0,   
             dirs: Vec::new(),
             
@@ -81,8 +88,8 @@ impl Default for Crawler {
 }
 
 impl Crawler {
-    pub fn new() -> Crawler {
-        Crawler { ..Default::default() }
+    pub fn new(server_name: &str, server_port: u16) -> Crawler {
+        Crawler { root_server_name: server_name.to_string(), root_server_port: server_port, ..Default::default() }
     }
 
     pub fn report(&self) {
@@ -170,7 +177,15 @@ impl Crawler {
         );
     }
 
-    pub fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
+    pub fn start_crawl(&mut self) -> std::io::Result<()> {
+        // TODO: Can we specify a starting selector?
+        // TODO: Can we fix this without cloning?
+        self.crawl(STARTING_SELECTOR, &self.root_server_name.clone(), self.root_server_port)?;
+
+        Ok(())
+    }
+
+    fn crawl(&mut self, selector: &str, server_name: &str, server_port: u16) -> std::io::Result<()> {
         let request = Request::new(selector, server_name, server_port, ItemType::Dir);
         
         // TODO: avoid clone
@@ -245,7 +260,7 @@ impl Crawler {
     fn handle_dir(&mut self, response_line: ResponseLine) -> std::io::Result<()> {
         // External server
         // External server is anything with a different server name OR a different port 
-        if response_line.server_name != self.root_server_name() || response_line.server_port != self.root_server_port() {
+        if response_line.server_name != self.root_server_name || response_line.server_port != self.root_server_port {
             // Get the current local time
             #[allow(unused_variables)]
             let local_time = Local::now();
@@ -364,14 +379,6 @@ impl Crawler {
                 *used_server_port == server_port &&
                 used_selector == selector
         })
-    }
-
-    fn root_server_name(&self) -> &String {
-        &self.used[0].0
-    }
-
-    fn root_server_port(&self) -> u16 {
-        self.used[0].1
     }
 
     // TODO: Should this use self or???
