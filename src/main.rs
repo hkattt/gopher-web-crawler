@@ -25,23 +25,24 @@ const MAX_FILENAME_LEN: usize = 255;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Assign default program parameters
-    let mut server_name = String::from("comp3310.ddns.net");
-    let mut server_port = 70;
+    let mut server_name = None;
+    let mut server_port = None;
     let mut remove_dirs = true;
-    let starting_selector = String::from("");
 
     let mut args_iter = env::args().skip(1);
     while let Some(arg) = args_iter.next() {
         match arg.as_str() {
             // Server name argument
             "-n" => {
-                server_name = args_iter.next().ok_or("Missing server name after -n")?;
+                server_name = Some(
+                    args_iter.next().ok_or("Missing server name after -n")?
+                );
             }
             // Server port argument
             "-p" => {
                 let port_str = args_iter.next().ok_or("Missing server port after -p")?;
                 server_port = match port_str.parse() {
-                    Ok(port) => port,
+                    Ok(port) => Some(port),
                     Err(_) => {
                         eprintln!("Server port must be an integer");
                         return Ok(())
@@ -69,7 +70,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // TODO: Should we make SERVER_PORT a &str?
     let mut crawler = Crawler::new(server_name, server_port);
+
+    let starting_selector = String::from("");
     crawler.start_crawl(starting_selector)?;
+
     crawler.report();
 
     // Remove output directory and all of its contents

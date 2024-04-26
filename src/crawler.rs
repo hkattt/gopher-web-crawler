@@ -20,8 +20,6 @@ use crate::gopher::{
 };
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
-
-// TODO: Can we use references instread?
 pub struct Crawler {
     root_server_name: Rc<String>,
     root_server_port: u16,
@@ -89,8 +87,17 @@ impl Default for Crawler {
 }
 
 impl Crawler {
-    pub fn new(server_name: String, server_port: u16) -> Crawler {
-        Crawler { root_server_name: server_name.into(), root_server_port: server_port, ..Default::default() }
+    pub fn new(server_name: Option<String>, server_port: Option<u16>) -> Crawler {
+        Crawler { 
+            root_server_name: server_name.map_or_else(
+                || Crawler::default().root_server_name, 
+                Rc::new
+            ),
+            root_server_port: server_port.unwrap_or(
+                Crawler::default().root_server_port
+            ),
+            ..Default::default() 
+        }
     }
 
     pub fn report(&self) {
