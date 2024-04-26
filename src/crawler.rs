@@ -2,7 +2,7 @@ use std::{
     cmp::min, 
     fs::{File, Metadata}, 
     io::Write, 
-    str 
+    str
 };
 
 // Chrono imports for data-time functionality
@@ -21,8 +21,8 @@ use crate::{gopher::{
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
 
 // TODO: Can we use references instread?
-pub struct Crawler {
-    root_server_name: String,
+pub struct Crawler<'a> {
+    root_server_name: &'a str,
     root_server_port: u16,
 
     ndir: u32,                                           // The number of directories
@@ -52,10 +52,10 @@ pub struct Crawler {
     used: Vec<(String, u16, String)>,                         // Used (server name, server port, selector)
 }
 
-impl Default for Crawler {
-    fn default() -> Crawler {
+impl<'a> Default for Crawler<'a> {
+    fn default() -> Crawler<'a> {
         Crawler {
-            root_server_name: SERVER_NAME.to_string(),
+            root_server_name: SERVER_NAME,
             root_server_port: SERVER_PORT,
 
             ndir: 0,   
@@ -87,9 +87,9 @@ impl Default for Crawler {
     }
 }
 
-impl Crawler {
-    pub fn new(server_name: &str, server_port: u16) -> Crawler {
-        Crawler { root_server_name: server_name.to_string(), root_server_port: server_port, ..Default::default() }
+impl<'a> Crawler<'a> {
+    pub fn new(server_name: &'a str, server_port: u16) -> Crawler {
+        Crawler { root_server_name: server_name, root_server_port: server_port, ..Default::default() }
     }
 
     pub fn report(&self) {
@@ -180,7 +180,7 @@ impl Crawler {
     pub fn start_crawl(&mut self) -> std::io::Result<()> {
         // TODO: Can we specify a starting selector?
         // TODO: Can we fix this without cloning?
-        self.crawl(STARTING_SELECTOR, &self.root_server_name.clone(), self.root_server_port)?;
+        self.crawl(STARTING_SELECTOR, &self.root_server_name, self.root_server_port)?;
 
         Ok(())
     }
