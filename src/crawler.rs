@@ -87,12 +87,30 @@ impl Default for Crawler {
 }
 
 impl Crawler {
+    /// Constructs a new `Crawler` instance with the given optional parameters.
+    /// 
+    /// If `server_name` is provided, it will be used as the root server name. Otherwise,
+    /// the default root server name: comp3310.ddns.net is used.
+    /// 
+    /// If `server_port` is provided, it will be used as the root server port. Otherwise,
+    /// the default root server port: 70 is used.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `server_name`: Optional parameter specifying the root server name.
+    /// * `server_port`: Optional parameter specifying the root server port.
+    /// 
+    /// # Returns 
+    /// 
+    /// A new `Crawler` instance with the specified or default parameters.
     pub fn new(server_name: Option<String>, server_port: Option<u16>) -> Crawler {
         Crawler { 
+            // Use `server_name` if it is provided. Otherwise, use the default.
             root_server_name: server_name.map_or_else(
                 || Crawler::default().root_server_name, 
                 Rc::new
             ),
+            // Use `server_port` if it is provided. Otherwise, use the default.
             root_server_port: server_port.unwrap_or(
                 Crawler::default().root_server_port
             ),
