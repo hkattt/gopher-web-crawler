@@ -212,10 +212,10 @@ impl<'a> Crawler<'a> {
                             match error {
                                 ResponseLineError::Empty => (),
                                 ResponseLineError::InvalidParts(line) => {
-                                    self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((line.to_string(), ResponseOutcome::MalformedResponseLine));
                                 },
                                 ResponseLineError::EmptyDisplayString(line) => {
-                                    self.invalid_references.push((line, ResponseOutcome::MalformedResponseLine));
+                                    self.invalid_references.push((line.to_string(), ResponseOutcome::MalformedResponseLine));
                                 },
                                 ResponseLineError::EmptyHost(server_name, server_port, selector) => {
                                     self.invalid_references.push((

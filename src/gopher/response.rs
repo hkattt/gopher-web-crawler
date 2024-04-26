@@ -65,15 +65,15 @@ impl ToString for ItemType {
 }
 
 #[derive(Debug)]
-pub enum ResponseLineError {
+pub enum ResponseLineError<'a> {
     Empty,
-    InvalidParts(String),
-    EmptyDisplayString(String),
-    EmptyHost(String, String, String), 
-    NonIntPort(String, String, String)
+    InvalidParts(&'a str),
+    EmptyDisplayString(&'a str),
+    EmptyHost(&'a str, String, &'a str), 
+    NonIntPort(&'a str, &'a str, &'a str)
 }
 
-impl std::fmt::Display for ResponseLineError {
+impl<'a> std::fmt::Display for ResponseLineError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ResponseLineError::Empty => write!(f, "Empty response line"),
@@ -85,7 +85,7 @@ impl std::fmt::Display for ResponseLineError {
     }
 }
 
-impl std::error::Error for ResponseLineError {}
+impl<'a> std::error::Error for ResponseLineError<'a> {}
 
 pub struct ResponseLine<'a> {
     pub item_type:   ItemType,
@@ -104,7 +104,7 @@ impl<'a> ResponseLine<'a> {
 
         // TODO: Can we do this without cloning?
         if parts.clone().count() != 4 {
-            return Err(ResponseLineError::InvalidParts(line.to_string()));
+            return Err(ResponseLineError::InvalidParts(line));
         }
 
         let user_display_string = parts.next().unwrap();
@@ -117,21 +117,21 @@ impl<'a> ResponseLine<'a> {
                 '9' => ItemType::Bin,
                 _   => ItemType::Unknown
             },
-            None => return Err(ResponseLineError::EmptyDisplayString(line.to_string()))
+            None => return Err(ResponseLineError::EmptyDisplayString(line))
         };
         // Any selector is fine
         let selector = parts.next().unwrap();
         // TODO: Server name cannot be empty
         let server_name = parts.next().unwrap();
         if server_name.is_empty() {
-            return Err(ResponseLineError::EmptyHost(server_name.to_string(), parts.next().unwrap().to_string(), selector.to_string()))
+            return Err(ResponseLineError::EmptyHost(server_name, parts.next().unwrap().to_string(), selector))
         }
         // TODO: Server port must be an integer
         let server_port_str = parts.next().unwrap();
         let server_port = server_port_str.parse::<u16>();
         let server_port = match server_port {
             Ok(port) => port,
-            Err(_) => return Err(ResponseLineError::NonIntPort(server_name.to_string(), server_port_str.to_string(), selector.to_string())), 
+            Err(_) => return Err(ResponseLineError::NonIntPort(server_name, server_port_str, selector)), 
         };
         Ok(
             ResponseLine {
