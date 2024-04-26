@@ -1,5 +1,7 @@
 # COMP3310 - Assignment 2: Indexing a Gopher
 
+Hugo Kat: u7287091
+
 ## Requirements
 This Gopher server crawler was implemented in Rust. See the [Installation section](https://doc.rust-lang.org/book/ch01-01-installation.html) of The Rust Programming Language book for installation steps. 
 
@@ -57,13 +59,9 @@ As RFC 1436, text file and directory item types should be terminated with the la
 The crawler identified 5 problematic internal references which had to be dealt with explicitly. The full details can be found in the crawler report.
 
 ## Wireshark Initial Response
-The below image shows the initial Gopher request sent from the crawler to the Gopher server. As shown in the image, the port number is 70.
+The below shows the initial response conversation between the crawler and the Gopher server as per [Ed Post #114](https://edstem.org/au/courses/16155/discussion/1886900).
 
-![image](imgs/initial-gopher.png)
-
-The below image shows the final Gopher response sent from the Gopher server to the crawler. As shown in the image, the response is terminated with the last line `'.'CR-LF`. The image also shows some of the home-page information sent from the Gopher server.
-
-![image](imgs/final-gopher.png)
+![image](imgs/wireshark-convo.png)
 
 ## Crawler Report 
 This final crawler report for `comp3310.ddns.net:70` is shown below. 
