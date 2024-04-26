@@ -10,6 +10,8 @@ The project also uses the following crates:
 All networking functionality was done using standard library imports.
 
 ## Usage
+Note that this project was developed and tested in a **Ubuntu Linux** environment. 
+
 The usage for the program is:
 ```
 gopher [-n <server_name>] [-p <server_port>] [-d]
@@ -17,7 +19,7 @@ gopher [-n <server_name>] [-p <server_port>] [-d]
 Where
 * `-n` specifies the name of the server to crawl
 * `-p` specifies the port of the server to crawl 
-* `-d` flags that the output directory `out` should not be deleted
+* `-d` flags that the output directory `out` should **not** be deleted
 
 with default values `server_name=comp3310.ddns.net` and `server_port=70`.
 
@@ -29,7 +31,7 @@ in the root directory. In debug mode, the program will print additional informat
 ```
 cargo run --release -- [-n <server_name>] [-p <server_port>] [-d] 
 ```
-This will only print request innformation and the final crawl report. 
+This will only print request information and the final crawl report. 
 
 ## Project Structure
 `src`: contains all the program files.
@@ -48,9 +50,9 @@ This will only print request innformation and the final crawl report.
 An external server is any referenced server that is on a different host or port to the default server. `comp3310.ddns.net:70` references two external servers. Further details can be found in the crawler report. 
 
 ## Invalid References
-Files only contribute to the file count and file statistcs if the Gopher transaction was completed sucessfully. Responses that we timed-out are not deemed sucessful transactions. 
+Files only contribute to the file count and file statistics if the Gopher transaction was completed successfully. Responses that we timed-out are not deemed successful transactions. 
 
-As RFC 1436, text file and directory item types should be terminated with the last line `'.'CR-LF`. If the last line is missing, the transaction is not counted as sucessful.
+As RFC 1436, text file and directory item types should be terminated with the last line `'.'CR-LF`. If the last line is missing, the transaction is not counted as successful.
 
 The crawler identified 5 problematic internal references which had to be dealt with explicitly. The full details can be found in the crawler report.
 
@@ -59,7 +61,7 @@ The below image shows the initial Gopher request sent from the crawler to the Go
 
 ![image](imgs/initial-gopher.png)
 
-The below image shows the final Gopher response sent from the Gopher server to the crawler. As shown in the image, the response is terminated with the last line `'.'CR-LF`. The image also shows some of the home-page infomation sent from the Gopher server.
+The below image shows the final Gopher response sent from the Gopher server to the crawler. As shown in the image, the response is terminated with the last line `'.'CR-LF`. The image also shows some of the home-page information sent from the Gopher server.
 
 ![image](imgs/final-gopher.png)
 
