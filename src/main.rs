@@ -10,21 +10,13 @@ use std::{
 
 use crawler::Crawler;
 
-// Open server on Gophie with: comp3310.ddns.net:70
-// Local host: 127.0.0.1
-
 const CRLF: &str              = "\r\n";
 const TAB: &str               = "\t";
 const OUTPUT_FOLDER: &str     = "out";
 const MAX_CHUNK_SIZE: usize   = 4096; 
 const MAX_FILENAME_LEN: usize = 255;  
 
-// TODO: What is up with invalid 0
-// TODO: What about malformed1
-// TODO: Debug mode
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Assign default program parameters
     let mut server_name = None;
     let mut server_port = None;
     let mut remove_dirs = true;
@@ -68,12 +60,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // TODO: Should we make SERVER_PORT a &str?
+    // Crawl the Gopher server and report the results
     let mut crawler = Crawler::new(server_name, server_port);
-
-    let starting_selector = String::from("");
-    crawler.start_crawl(starting_selector)?;
-
+    crawler.start_crawl()?;
     crawler.report();
 
     // Remove output directory and all of its contents

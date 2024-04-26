@@ -45,8 +45,8 @@ pub enum ResponseOutcome {
 /// * `buffer`: Raw bytes received from the server, with the last line .\r\n removed
 /// * `response_outcome`: Specifies the result of the transaction
 pub struct Response {
-    pub buffer: Vec<u8>,    // Bytes received
-    pub response_outcome: ResponseOutcome,        // TODO: Explain
+    pub buffer: Vec<u8>,
+    pub response_outcome: ResponseOutcome,
 }
 
 /// Represents a response line from a Gopher server.
@@ -111,7 +111,7 @@ impl Response {
     /// are seperated by CLRF.
     pub fn to_response_lines<'a>(&'a self) -> Vec<Result<ResponseLine, ResponseLineError>> {
         // Convert byte stream into a string (i.e. UTF-8 sequence)
-        let buffer = str::from_utf8(&self.buffer).expect("Ivalid UTF-8 sequence"); // TODO: Handle error??
+        let buffer = str::from_utf8(&self.buffer).expect("Ivalid UTF-8 sequence"); 
         buffer.split(CRLF).map(|line| ResponseLine::new(line.to_string())).collect()
     }
 }

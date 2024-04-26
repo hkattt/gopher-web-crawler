@@ -20,35 +20,72 @@ use crate::gopher::{
 };
 
 use crate::{MAX_FILENAME_LEN, OUTPUT_FOLDER};
+
+/// Represents a Gopher server craweler. 
+/// 
+/// * `root_server_name`: Hostname of the root (start) server
+/// * `root_server_port`: Port number of the root (start) server
+/// 
+/// * `ndir`: Number of directories
+/// * `dirs`: List of all directories (server details, directory) pairs
+/// 
+/// * `ntxt`: Number of text files
+/// * `txt_files`: List of all simple text files (server details, text file) pairs
+/// 
+/// * `nbin`: Number of binary files
+/// * `bin_files`: List of all binary files (server details, binary file) pairs
+/// 
+/// * `smallest_contets`: Contents of the smallest text file
+/// * `smallest_txt`: Size of the smallest text file (bytes)
+/// * `largest_txt`: Size of the largest text file (bytes)
+/// 
+/// * `smallest_bin`: Size of the smallest binary file
+/// * `largest_bin`: Size of the largest binary file
+/// 
+/// * `smallest_txt_selector`: The selector of the smallest text file 
+/// (server details, text file selector) pairs
+/// * `largest_txt_selector`: The selector of the largest text file 
+/// (server details, text file selector) pairs
+/// * `smallest_bin_selector`: The selector of the smallest binary file 
+/// (server details, binary file selector) pairs
+/// * `largest_bin_selector`: The selector of the largest binary file 
+/// (server details, binary file selector) pairs
+/// 
+/// * `nerr`: The number of unique invalid references (error types)
+/// * `external_references`: List of external servers and if they accepted
+/// a connection (server name, server port, connected) triples
+/// * `invalid_references`: List of invalid references 
+/// (details of the request, response outcome) pairs
+/// * `used`: List of used selectors (server name, server port, selector) tripless
 pub struct Crawler {
     root_server_name: Rc<String>,
     root_server_port: u16,
 
-    ndir: u32,                                           // The number of directories
-    dirs: Vec<(Rc<String>, Rc<String>)>,                         // List of all directories (server details, directory)
+    ndir: u32,
+    dirs: Vec<(Rc<String>, Rc<String>)>,
 
-    ntxt:  u32,                                          // The number of simple text files
-    txt_files: Vec<(Rc<String>, Rc<String>)>,                    // List of all simple text tiles (full path) (server details, text file)
+    ntxt: u32,
+    txt_files: Vec<(Rc<String>, Rc<String>)>,
     
-    nbin:  u32,                                          // The number of binary (i.e. non-text) files
-    bin_files: Vec<(Rc<String>, Rc<String>)>,                    // List of all binary files (full path) (server details, binary file)
+    nbin: u32,
+    bin_files: Vec<(Rc<String>, Rc<String>)>,
     
-    smallest_contents: String,                           // Contents of the smallest text file
-    smallest_txt: u64,                                   // The size of the smallest text file
-    largest_txt: u64,                                    // The size of the largest text file
+    smallest_contents: String,
+    smallest_txt: u64,
+    largest_txt: u64,
     
-    smallest_bin: u64,                                   // The size of the smallest binary file
-    largest_bin: u64,                                    // The size of the largest binary file
+    smallest_bin: u64,
+    largest_bin: u64,
     
-    smallest_txt_selector: (Rc<String>, Rc<String>),             // The selector of the smallest text file
-    largest_txt_selector:  (Rc<String>, Rc<String>),              // The selector of the largest text file
-    smallest_bin_selector: (Rc<String>, Rc<String>),             // The selector of the smallest binary file
-    largest_bin_selector:  (Rc<String>, Rc<String>),              // The selector of the largest binary file
+    smallest_txt_selector: (Rc<String>, Rc<String>),
+    largest_txt_selector:  (Rc<String>, Rc<String>),
+    smallest_bin_selector: (Rc<String>, Rc<String>),
+    largest_bin_selector:  (Rc<String>, Rc<String>),
     
-    nerr: u32,                                           // The number of unique invalid references (error types)
-    external_servers: Vec<(Rc<String>, u16, bool)>,               // TODO: Fix List of external servers and if they accepted a connection
-    invalid_references: Vec<(String, ResponseOutcome)>,  // List of references that have "issues/errors" that had be explicitly dealt with
-    used: Vec<(Rc<String>, u16, Rc<String>)>,                         // Used (server name, server port, selector)
+    nerr: u32,
+    external_servers: Vec<(Rc<String>, u16, bool)>,
+    invalid_references: Vec<(String, ResponseOutcome)>,
+    used: Vec<(Rc<String>, u16, Rc<String>)>,
 }
 
 impl Default for Crawler {
@@ -118,6 +155,7 @@ impl Crawler {
         }
     }
 
+    /// Reports the outcome of a server crawl
     pub fn report(&self) {
         let format_server_selector = |(server_details, selector): &(Rc<String>, Rc<String>)| {
             format!("{}: {}", *server_details, *selector)
@@ -203,12 +241,12 @@ impl Crawler {
         );
     }
 
-    pub fn start_crawl(&mut self, starting_selector: String) -> std::io::Result<()> {
-        // TODO: Can we specify a starting selector?
-        // TODO: Can we fix this without cloning?
-        // self.crawl(STARTING_SELECTOR, self.root_server_name, self.root_server_port)?;
-        // TODO: How use root server name!!
-        // TODO: Do these need to be Rcs?
+    /// Starts a Gopher server crawl on the root server name 
+    /// and root server port
+    pub fn start_crawl(&mut self) -> std::io::Result<()> {
+        // Send an empty selector to start the call
+        let starting_selector = String::from("");
+
         self.crawl(
             Rc::new(starting_selector), 
             Rc::clone(&self.root_server_name), 
@@ -218,6 +256,15 @@ impl Crawler {
         Ok(())
     }
 
+    /// Crawls a given Gopher server with a selector
+    /// 
+    /// # Arguments
+    /// * `selector`: Selector string being used to request an item
+    /// * `server_name`: The name of the Gopher server to be crawled
+    /// * `server_port`: The port number of the Gopher server to be crawled
+    /// 
+    /// # Returns
+    /// Nothing if sucessfull. An IO error is unsucessful.
     fn crawl(&mut self, selector: Rc<String>, server_name: Rc<String>, server_port: u16) -> std::io::Result<()> {
         self.used.push((
             Rc::clone(&server_name), 
@@ -225,6 +272,7 @@ impl Crawler {
             Rc::clone(&selector)
         ));
 
+        // Request to send to the server
         let request = Request::new(
             Rc::clone(&selector), 
             Rc::clone(&server_name), 
@@ -232,7 +280,6 @@ impl Crawler {
             ItemType::Dir
         );
         
-        // TODO: Actually handle errors
         let response = gopher::send_and_recv(&request)
             .map_err(|error| {
                 debug_eprintln!("Problem sending OR receving request: {error}");
@@ -241,14 +288,17 @@ impl Crawler {
 
         match response.response_outcome {
             ResponseOutcome::Complete => {
+                // Split the response into response lines
                 for response_line in response.to_response_lines() {
                     match response_line {
+                        // Process the response line
                         Ok(response_line) => {
                             self.process_response_line(response_line).map_err(|error| {
                                 debug_eprintln!("Problem processing response line: {error}");
                                 error
                             })?;
                         },
+                        // Invalid response line
                         Err(error) => {
                             match error {
                                 ResponseLineError::Empty => (),
@@ -277,6 +327,7 @@ impl Crawler {
                 self.dirs.push((request.server_details, selector));
                 self.ndir += 1;
             }
+            // Response unsucessful
             _ => {
                 self.invalid_references.push((
                     format!("{} {}", request.server_details, selector),
@@ -299,35 +350,41 @@ impl Crawler {
     }
 
     fn handle_dir(&mut self, response_line: ResponseLine) -> std::io::Result<()> {
-        // External server
         // External server is anything with a different server name OR a different port 
         if response_line.server_name != self.root_server_name || response_line.server_port != self.root_server_port {
             // Get the current local time
             #[allow(unused_variables)]
             let local_time = Local::now();
-            // TODO: Use format everywhere
+
+            // Attempts to connect to the external server
             match gopher::connect(&format!("{}:{}", response_line.server_name, response_line.server_port)) {
+                // Connected sucessfully
                 Ok(_) => {
                     debug_println!("[{:02}h:{:02}m:{:02}s]: CONNECTED TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
+
                     self.external_servers.push((response_line.server_name, response_line.server_port, true));
                     return Ok(())
                 },
+                // Failed to connect
                 Err(_) => {
                     debug_println!("[{:02}h:{:02}m:{:02}s]: FAILED TO CONNECT TO EXTERNAL {} ON {}", 
                         local_time.time().hour(), local_time.time().minute(), local_time.time().second(),
                         response_line.server_name, response_line.server_port);
-                    // TODO: Should we just pass string server_port?
+
                     self.external_servers.push((response_line.server_name, response_line.server_port, false));
                     return Ok(())
                 },
             }
         }
 
-        if self.has_crawled(&response_line.server_name, response_line.server_port, &response_line.selector) { return Ok(()) }
+        // Check if the directory has been crawled before
+        if self.has_crawled(&response_line.server_name, response_line.server_port, &response_line.selector) { 
+            return Ok(()) 
+        }
         
-        // TODO: Is it good to use reference here?
+        // Crawl the directory
         self.crawl(response_line.selector, 
             response_line.server_name, 
             response_line.server_port
@@ -336,8 +393,10 @@ impl Crawler {
     }
 
     fn handle_file(&mut self, response_line: ResponseLine, file_type: ItemType) -> std::io::Result<()> {
-        // TODO: Is there better syntax?
-        if self.has_crawled(&*response_line.server_name, response_line.server_port, &*response_line.selector) { return Ok(()) }
+        // Check if the file has been crawled before
+        if self.has_crawled(&*response_line.server_name, response_line.server_port, &*response_line.selector) { 
+            return Ok(()) 
+        }
         
         self.used.push((
             Rc::clone(&response_line.server_name), 
@@ -345,6 +404,7 @@ impl Crawler {
             Rc::clone(&response_line.selector))
         );
         
+        // Request to send to the server
         let request = Request::new(
             response_line.selector, 
             response_line.server_name, 
@@ -358,6 +418,7 @@ impl Crawler {
         })?;
 
         match response.response_outcome {
+            // Sucessful transaction
             ResponseOutcome::Complete => {
                 let f = Crawler::download_file(&request.selector, &response.buffer).map_err(|error| {
                     debug_eprintln!("Error downloading {} file: {}", request.item_type.to_string(), error);
@@ -371,6 +432,7 @@ impl Crawler {
                     }
                 }
             }
+            // Unsucessful transaction
             _ => {
                 self.invalid_references.push((
                     format!("{} {}", request.server_details.clone(), request.selector.to_string()),
@@ -389,11 +451,10 @@ impl Crawler {
                 self.txt_files.push((
                     Rc::clone(&request.server_details), 
                     Rc::clone(&request.selector))
-                ); // TODO: Can we use references instead?
+                ); 
 
                 if file_size > self.largest_txt {
                     self.largest_txt = file_size;
-                    // TODO: Can we use references instead?
                     self.largest_txt_selector = (
                         Rc::clone(&request.server_details), 
                         Rc::clone(&request.selector)
@@ -406,8 +467,7 @@ impl Crawler {
                         Rc::clone(&request.server_details), 
                         Rc::clone(&request.selector)
                     );
-                    // TODO: Use the file instead?? might not be worth
-                    self.smallest_contents = str::from_utf8(buffer).expect("Ivalid UTF-8 sequence").to_string();  // TODO: Handle error??f.bytes().
+                    self.smallest_contents = str::from_utf8(buffer).expect("Ivalid UTF-8 sequence").to_string();  
                 }
             },
             ItemType::Bin => {
@@ -415,7 +475,7 @@ impl Crawler {
                 self.bin_files.push((
                     Rc::clone(&request.server_details), 
                     Rc::clone(&request.selector)
-                )); // TODO: Can we use references instead of clone and to_string?
+                )); 
 
                 if file_size > self.largest_bin {
                     self.largest_bin = file_size;
@@ -446,19 +506,20 @@ impl Crawler {
         })
     }
 
-    // TODO: Should this use self or???
     fn download_file(selector: &str, buffer: &[u8]) -> std::io::Result<File> {
         // Remove the / prefix from the selector. Truncate long selector names
         let file_name = &selector[1..min(selector.len(), MAX_FILENAME_LEN + 1)];
+
         // Replace forward slashes with dashes to create a valid file name
         let file_name = file_name.replace("/", "-");
-        // TODO: Replace the string stuff with global variables?
+        
         let file_path = format!("{}/{}", OUTPUT_FOLDER, &file_name);
         let mut f = File::create(file_path).map_err(|error| {
             debug_eprintln!("Unable to create new file: {error}");
             error
         })?;
         f.write_all(buffer)?;
+        
         Ok(f)
     }
 }
