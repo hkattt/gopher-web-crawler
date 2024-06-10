@@ -1,6 +1,6 @@
 # Gopher Web Crawler
 
-Gopher web crawler implemented in Rust. 
+Gopher web crawler implemented in Rust for COMP3310 Computer Networks at the ANU.
 
 ## Requirements
 See the [Installation section](https://doc.rust-lang.org/book/ch01-01-installation.html) of The Rust Programming Language book for installation steps. 
