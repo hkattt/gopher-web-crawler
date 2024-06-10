@@ -1,11 +1,11 @@
-# COMP3310 - Assignment 2: Indexing a Gopher
+# Gopher Web Crawler
 
-Hugo Kat: u7287091
+Gopher web crawler implemented in Rust. 
 
 ## Requirements
-This Gopher server crawler was implemented in Rust. See the [Installation section](https://doc.rust-lang.org/book/ch01-01-installation.html) of The Rust Programming Language book for installation steps. 
+See the [Installation section](https://doc.rust-lang.org/book/ch01-01-installation.html) of The Rust Programming Language book for installation steps. 
 
-The project also uses the following crates:
+The project uses the following crates:
 * `chrono`: For date-time functionality.
 * `debug_print`: For print functions which only trigger in debug mode.
 
@@ -61,11 +61,6 @@ Files only contribute to the file count and file statistics if the Gopher transa
 As RFC 1436, text file and directory item types should be terminated with the last line `'.'CR-LF`. If the last line is missing, the transaction is not counted as successful.
 
 The crawler identified 5 problematic internal references which had to be dealt with explicitly. The full details can be found in the crawler report.
-
-## Wireshark Initial Response
-The below shows the initial response conversation between the crawler and the Gopher server as per [Ed Post #114](https://edstem.org/au/courses/16155/discussion/1886900).
-
-![image](imgs/wireshark-convo.png)
 
 ## Crawler Report 
 This final crawler report for `comp3310.ddns.net:70` is shown below. 
